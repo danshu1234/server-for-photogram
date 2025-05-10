@@ -30,4 +30,5 @@ export class User {
   socket: string;
 }
 
+
 export const UserSchema = SchemaFactory.createForClass(User);
