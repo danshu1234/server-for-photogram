@@ -16,6 +16,9 @@ export class Photo {
 
   @Prop({ required: true })
   email: string;
+
+  @Prop({ required: true })
+  date: string;
 }
 
 export const PhotoSchema = SchemaFactory.createForClass(Photo);

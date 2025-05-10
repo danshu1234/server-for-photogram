@@ -7,7 +7,7 @@ export class PhotosController {
     constructor(private readonly PhotosService: PhotosService){}
 
     @Post('create')
-    createNewPhoto(@Body() photo: {id: string, email: string, img: string}) {
+    createNewPhoto(@Body() photo: {id: string, email: string, img: string, date: string}) {
         this.PhotosService.createPhoto(photo)
     }
 
@@ -34,6 +34,11 @@ export class PhotosController {
     @Get('all')
     getAllPhotos() {
         return this.PhotosService.getAll()
+    }
+
+    @Get('big/photo/:photoId')
+    getPhotoById(@Param('photoId') photoId: string) {
+        return this.PhotosService.getPhotoById(photoId)
     }
 
 }

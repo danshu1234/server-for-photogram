@@ -29,6 +29,7 @@
     "@types/multer": "^1.4.12",
     "mongoose": "^8.14.0",
     "multer": "^1.4.5-lts.2",
+    "qrcode.react": "^4.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1"

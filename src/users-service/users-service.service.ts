@@ -97,10 +97,10 @@ export class UsersServiceService {
         }
     }
 
-    async newNotif(body: {email: string, userEmail: string}) {
+    async newNotif(body: {email: string, userEmail: string, photoId: string}) {
         const findUser = await this.userModel.findOne({email: body.userEmail})
         const currentNotifs = findUser?.notifs || [];
-        const resultNotifs = [...currentNotifs, `${body.email} оценил(а) ваше фото`]
+        const resultNotifs = [...currentNotifs, {notif: `${body.email} оценил(а) ваше`, photoId: body.photoId}]
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
         if (findUser?.socket !== '') {
             if (findUser?.socket !== undefined) {

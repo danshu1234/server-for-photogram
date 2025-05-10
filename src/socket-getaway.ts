@@ -17,4 +17,11 @@ export class SocketGateway {
     this.server.to(message.targetSocket).emit('replyMessage', message.message)
   }
 
+  @SubscribeMessage('getAllSockets')
+  getAllSockets(@MessageBody() message: {targetSocket: string}) {
+    const allSockets = Array.from(this.server.sockets.sockets.values());
+    const resultSocketsId = allSockets.map(el => el.id)
+    this.server.to(message.targetSocket).emit('resultSockets', resultSocketsId)
+  }
+
 }

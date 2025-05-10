@@ -47,7 +47,7 @@ export class UsersControllerController {
     }
 
     @Patch('new/notif')
-    newNotif(@Body() body: {email: string, userEmail: string}) {
+    newNotif(@Body() body: {email: string, userEmail: string, photoId: string}) {
         this.UsersService.newNotif(body)
     }
 

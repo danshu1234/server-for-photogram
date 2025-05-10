@@ -8,12 +8,13 @@ export class PhotosService {
 
     constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>) {}
 
-    async createPhoto(photo: {id: string, email: string, img: string}) {
+    async createPhoto(photo: {id: string, email: string, img: string, date: string}) {
         const myPhoto = new this.photoModel({
             id: photo.id,
             url: photo.img,
             email: photo.email,
             likes: [],
+            date: photo.date,
         })
         await myPhoto.save()
     }
@@ -44,6 +45,11 @@ export class PhotosService {
     async getAll() {
         const allPhotosArr = await this.photoModel.find()
         return allPhotosArr
+    }
+
+    async getPhotoById(photoId: string) {
+        const findPhoto = await this.photoModel.findOne({id: photoId})
+        return findPhoto?.url
     }
 
 }
