@@ -28,6 +28,12 @@ export class User {
 
   @Prop({ required: false })
   socket: string;
+
+  @Prop({ required: true })
+  usersBan: string[];
+
+  @Prop({ required: false })
+  visits: string[];
 }
 
 

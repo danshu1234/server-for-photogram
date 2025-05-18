@@ -16,6 +16,7 @@ export class UsersServiceService {
             subscribes: 0,
             notifs: [],
             socket: '',
+            visits: [],
         })
         await myUser.save()
     }
@@ -113,4 +114,27 @@ export class UsersServiceService {
         await this.userModel.findOneAndUpdate({email: body.email}, {notifs: []}, {new: true})
     }
 
+    async getBannedUsers(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        return findUser?.usersBan
+    }
+
+    async addBannedUser(body: {userEmail: string, email: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser?.usersBan !== undefined) {
+            const resultBannedList = [...findUser.usersBan, body.userEmail]
+            await this.userModel.findOneAndUpdate({email: body.email}, {usersBan: resultBannedList}, {new: true})
+        }
+    }
+
+    async getVisits(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        return findUser?.visits
+    }
+
+    async updateVisits(body: {visitsWithMe: string[], targetEmail: string}) {
+        console.log(body)
+        await this.userModel.findOneAndUpdate({email: body.targetEmail}, {visits: body.visitsWithMe}, {new: true})
+        return 'OK'
+    }
 }

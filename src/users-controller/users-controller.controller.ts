@@ -56,4 +56,24 @@ export class UsersControllerController {
         this.UsersService.clearNotifs(body)
     }
 
+    @Get('get/banned/users/:email')
+    getBannedUsers(@Param('email') email: string) {
+        return this.UsersService.getBannedUsers(email)
+    }
+
+    @Post('add/banned/user')
+    addBannedUser(@Body() body: {userEmail: string, email: string}) {
+        this.UsersService.addBannedUser(body)
+    }
+
+    @Get('get/visits/:email')
+    getVisits(@Param('email') email: string) {
+        return this.UsersService.getVisits(email)
+    }
+
+    @Patch('update/visits')
+    updateVisits(@Body() body: {visitsWithMe: string[], targetEmail: string}) {
+        return this.UsersService.updateVisits(body)
+    }
+
 }
