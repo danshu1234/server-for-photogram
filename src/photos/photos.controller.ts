@@ -1,13 +1,18 @@
 import { Controller, Post, Body, Get, Param, Delete, Patch } from '@nestjs/common';
 import { PhotosService } from './photos.service';
 
+interface Comment{
+    user: string,
+    comment: string,
+}
+
 @Controller('photos')
 export class PhotosController {
 
     constructor(private readonly PhotosService: PhotosService){}
 
     @Post('create')
-    createNewPhoto(@Body() photo: {id: string, email: string, img: string, date: string, descript: string}) {
+    createNewPhoto(@Body() photo: {id: string, email: string, img: string[], date: string, descript: string}) {
         this.PhotosService.createPhoto(photo)
     }
 
@@ -39,6 +44,26 @@ export class PhotosController {
     @Get('big/photo/:photoId')
     getPhotoById(@Param('photoId') photoId: string) {
         return this.PhotosService.getPhotoById(photoId)
+    }
+
+    @Get('comments/:photoId')
+    getComments(@Param('photoId') photoId: string) {
+        return this.PhotosService.getComments(photoId)
+    }
+
+    @Patch('new/comment')
+    addNewComment(@Body() body: {resultComment: Comment, targetId: string}) {
+        return this.PhotosService.addNewComment(body)
+    }
+
+    @Get('get/post/:id')
+    getPost(@Param('id') id: string) {
+        return this.PhotosService.getPost(id)
+    }
+
+    @Patch('perm/comments')
+    permComments(@Body() body: {photoId: string, perm: boolean}) {
+        this.PhotosService.permComments(body)
     }
 
 }

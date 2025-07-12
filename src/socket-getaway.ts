@@ -14,6 +14,7 @@ export class SocketGateway {
 
   @SubscribeMessage('newMessage')
   handleNewMessage(@MessageBody() message: MessageClass) {
+    console.log(message)
     this.server.to(message.targetSocket).emit('replyMessage', message.message)
   }
 

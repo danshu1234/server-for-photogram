@@ -3,12 +3,17 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Photo, PhotoDocument } from 'src/PhotoSchema';
 
+interface Comment{
+    user: string,
+    comment: string,
+}
+
 @Injectable()
 export class PhotosService {
 
     constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>) {}
 
-    async createPhoto(photo: {id: string, email: string, img: string, date: string, descript: string}) {
+    async createPhoto(photo: {id: string, email: string, img: string[], date: string, descript: string}) {
         const myPhoto = new this.photoModel({
             id: photo.id,
             url: photo.img,
@@ -16,6 +21,8 @@ export class PhotosService {
             likes: [],
             date: photo.date,
             descript: photo.descript,
+            comments: [],
+            commentsPerm: true,
         })
         await myPhoto.save()
     }
@@ -50,8 +57,35 @@ export class PhotosService {
 
     async getPhotoById(photoId: string) {
         const findPhoto = await this.photoModel.findOne({id: photoId})
-        return findPhoto?.url
+        return {
+            url: findPhoto?.url,
+            info: findPhoto,
+        }
     }
 
-    
+    async getComments(photoId: string) {
+        const findPhoto = await this.photoModel.findOne({id: photoId})
+        return findPhoto?.comments
+    }
+
+    async addNewComment(body: {resultComment: Comment, targetId: string}) {
+        const findPhoto = await this.photoModel.findOne({id: body.targetId})
+        if (findPhoto?.comments) {
+            const prevComments = findPhoto.comments
+            const resultComments = [...prevComments, body.resultComment]
+            await this.photoModel.findOneAndUpdate({id: body.targetId}, {comments: resultComments}, {new: true})
+            return 'OK'
+        }
+    }
+
+    async getPost(id: string) {
+        const findPost = await this.photoModel.findOne({id: id})
+        return findPost
+    }
+
+    async permComments(body: {photoId: string, perm: boolean}) {
+        await this.photoModel.findOneAndUpdate({id: body.photoId}, {commentsPerm: body.perm})
+    }
+
+  
 }
