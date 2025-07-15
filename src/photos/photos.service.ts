@@ -13,11 +13,11 @@ export class PhotosService {
 
     constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>) {}
 
-    async createPhoto(photo: {id: string, email: string, img: string[], date: string, descript: string}) {
+    async createPhoto(photo: {id: string, resultEmail: string, img: string[], date: string, descript: string}) {
         const myPhoto = new this.photoModel({
             id: photo.id,
             url: photo.img,
-            email: photo.email,
+            email: photo.resultEmail,
             likes: [],
             date: photo.date,
             descript: photo.descript,

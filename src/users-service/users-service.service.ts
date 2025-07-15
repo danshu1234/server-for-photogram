@@ -54,8 +54,13 @@ export class UsersServiceService {
         }
     }
 
+    async getCode(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        return findUser?.code
+    }
+
     async getSubs(email: string) {
-        const findThisUser = await this.userModel.findOne({email: email})
+        const findThisUser = await this.userModel.findOne({code: email})
         const subsAndCountryData = {
             subscribes: findThisUser?.subscribes,
             country: findThisUser?.country,
@@ -64,7 +69,7 @@ export class UsersServiceService {
         return subsAndCountryData
     }
 
-    async unSub(body: {targetEmail: string, email: string}) {
+    async unSub(body: {targetEmail: string, resultEmail: string}) {
         const arrFromEmail = body.targetEmail.split('')
         const newArrFromEmail = arrFromEmail.map(el => {
             if (el === '%') {
@@ -82,12 +87,17 @@ export class UsersServiceService {
         const findTargetUser = await this.userModel.findOne({email: resultEmail})
         const targetSubs = findTargetUser?.subscribes
         if (targetSubs) {
-            const filteredSubs = targetSubs.filter((el: string) => el !== body.email)
+            const filteredSubs = targetSubs.filter((el: string) => el !== body.resultEmail)
             await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: filteredSubs}, {new: true})
         }
     }   
 
-    async sub(body: {targetEmail: string, email: string}) {
+    async getEmail(code: string) {
+        const findUser = await this.userModel.findOne({code: code})
+        return findUser?.email
+    }
+
+    async sub(body: {targetEmail: string, resultEmail: string}) {
         const arrFromEmail = body.targetEmail.split('')
         const newArrFromEmail = arrFromEmail.map(el => {
             if (el === '%') {
@@ -105,12 +115,13 @@ export class UsersServiceService {
         const findTargetUser = await this.userModel.findOne({email: resultEmail})
         const targetSubs = findTargetUser?.subscribes
         if (targetSubs) {
-            const newSubList = [...targetSubs, body.email]
+            const newSubList = [...targetSubs, body.resultEmail]
             await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: newSubList}, {new: true})
         }
     }
 
     async addSocket(body: {email: string, socketId: string}) {
+        console.log(body.email)
         await this.userModel.findOneAndUpdate({email: body.email}, {socket: body.socketId}, {new: true})
     }
 
@@ -119,7 +130,7 @@ export class UsersServiceService {
     }
 
     async getNotifs(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
+        const findUser = await this.userModel.findOne({code: email})
         if (findUser?.notifs.length === 0) {
             return []
         } else {
@@ -127,18 +138,18 @@ export class UsersServiceService {
         }
     }
 
-    async newNotif(body: {email: string, userEmail: string, photoId?: string, type: string}) {
+    async newNotif(body: {resultEmail: string, userEmail: string, photoId?: string, type: string}) {
         const findUser = await this.userModel.findOne({email: body.userEmail})
         const currentNotifs = findUser?.notifs || [];
         let resultNotifs: any = []
         if (body.type === 'photo') {
-            resultNotifs = [...currentNotifs, {type: 'photo', user: body.email, photoId: body.photoId}]
+            resultNotifs = [...currentNotifs, {type: 'photo', user: body.resultEmail, photoId: body.photoId}]
         } else if (body.type === 'perm') {
-            resultNotifs = [...currentNotifs, {type: 'perm', user: body.email}]
+            resultNotifs = [...currentNotifs, {type: 'perm', user: body.resultEmail}]
         } else if (body.type === 'succes') {
-            resultNotifs = [...currentNotifs, {type: 'succes', user: body.email}]
+            resultNotifs = [...currentNotifs, {type: 'succes', user: body.resultEmail}]
         } else if (body.type === 'err') {
-            resultNotifs = [...currentNotifs, {type: 'err', user: body.email}]
+            resultNotifs = [...currentNotifs, {type: 'err', user: body.resultEmail}]
         }
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
     }
@@ -191,7 +202,7 @@ export class UsersServiceService {
     }
 
     async checkDelete(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
+        const findUser = await this.userModel.findOne({code: email})
         if (findUser) {
             return 'find'
         } else {
@@ -209,7 +220,7 @@ export class UsersServiceService {
     }
 
     async getAva(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
+        const findUser = await this.userModel.findOne({code: email})
         if (findUser?.avatar === '') {
             return ''
         } else {
@@ -218,7 +229,7 @@ export class UsersServiceService {
     }
 
     async newAvatar(body: {targetEmail: string, newAva: string}) {
-        await this.userModel.findOneAndUpdate({email: body.targetEmail}, {avatar: body.newAva}, {new: true})
+        await this.userModel.findOneAndUpdate({code: body.targetEmail}, {avatar: body.newAva}, {new: true})
     }
 
     async getFullData(email: string) {
@@ -232,17 +243,17 @@ export class UsersServiceService {
     }
 
     async checkOpen(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
+        const findUser = await this.userModel.findOne({code: email})
         return findUser?.open
     }
 
     async closeAcc(body: {email: string}) {
-        await this.userModel.findOneAndUpdate({email: body.email}, {open: false}, {new: true})
+        await this.userModel.findOneAndUpdate({code: body.email}, {open: false}, {new: true})
         return 'OK'
     }
 
     async openAcc(body: {email: string}) {
-        await this.userModel.findOneAndUpdate({email: body.email}, {open: true}, {new: true})
+        await this.userModel.findOneAndUpdate({code: body.email}, {open: true}, {new: true})
         return 'OK'
     }
 
@@ -299,7 +310,7 @@ export class UsersServiceService {
     }
 
     async checkCoords(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
+        const findUser = await this.userModel.findOne({code: email})
         if (findUser?.latitude !== null) {
             return 'OK'
         } else {
@@ -619,15 +630,6 @@ export class UsersServiceService {
         await this.userModel.findOneAndUpdate({email: body.email}, {messages: newChats}, {new: true})
     }
 
-    async getBirthday(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
-        return findUser?.birthday
-    }
-
-    async addBirthday(body: {email: string, resultDate: string}) {
-        await this.userModel.findOneAndUpdate({email: body.email}, {birthday: body.resultDate}, {new: true})
-    }
-
     async getSavePosts(email: string) {
         const findUser = await this.userModel.findOne({email: email})
         return findUser?.savePosts
@@ -648,6 +650,10 @@ export class UsersServiceService {
         }
         await this.userModel.findOneAndUpdate({email: body.email}, {savePosts: newSavePosts}, {new: true})
         return newSavePosts
+    }
+
+    async changeCode(body: {trueEmail: string, newCode: string}) {
+        await this.userModel.findOneAndUpdate({email: body.trueEmail}, {code: body.newCode}, {new: true})
     }
 
 }

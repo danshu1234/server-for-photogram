@@ -18,6 +18,11 @@ export class UsersControllerController {
         return this.UsersService.checkUser(email)
     }
 
+    @Get('get/code/:email')
+    getCode(@Param('email') email: string) {
+        return this.UsersService.getCode(email)
+    }
+
     @Get('check/find/user/:email')
     checkFindUser(@Param('email') email: string) {
         return this.UsersService.checkFindUser(email)
@@ -29,12 +34,12 @@ export class UsersControllerController {
     }
 
     @Patch('unsub')
-    unSubUser(@Body() body: {targetEmail: string, email: string}) {
+    unSubUser(@Body() body: {targetEmail: string, resultEmail: string}) {
         this.UsersService.unSub(body)
     }
 
     @Patch('sub')
-    subUser(@Body() body: {targetEmail: string, email: string}) {
+    subUser(@Body() body: {targetEmail: string, resultEmail: string}) {
         this.UsersService.sub(body)
     }
 
@@ -54,7 +59,7 @@ export class UsersControllerController {
     }
 
     @Patch('new/notif')
-    newNotif(@Body() body: {email: string, userEmail: string, photoId?: string, type: string}) {
+    newNotif(@Body() body: {resultEmail: string, userEmail: string, photoId?: string, type: string}) {
         this.UsersService.newNotif(body)
     }
 
@@ -106,6 +111,11 @@ export class UsersControllerController {
     @Get('get/user/name/:email') 
     getName(@Param('email') email: string) {
         return this.UsersService.getName(email)
+    }
+
+    @Get('get/email/:code')
+    getEmail(@Param('code') code: string) {
+        return this.UsersService.getEmail(code)
     }
 
     @Get('get/avatar/:email')
@@ -273,16 +283,6 @@ export class UsersControllerController {
         this.UsersService.pinMess(body)
     }
 
-    @Get('get/birthday/:email')
-    getBirthday(@Param('email') email: string) {
-        return this.UsersService.getBirthday(email)
-    }
-
-    @Patch('add/birthday')
-    addBirthday(@Body() body: {email: string, resultDate: string}) {
-        this.UsersService.addBirthday(body)
-    }
-
     @Get('get/save/posts/:email')
     getSavePosts(@Param('email') email: string) {
         return this.UsersService.getSavePosts(email)
@@ -291,6 +291,11 @@ export class UsersControllerController {
     @Patch('save/unsave/post')
     saveUnsavePost(@Body() body: {email: string, postId: string, type: string}) {
         return this.UsersService.saveUnsavePost(body)
+    }
+
+    @Patch('change/code')
+    changeCode(@Body() body: {trueEmail: string, newCode: string}) {
+        this.UsersService.changeCode(body)
     }
 
 }

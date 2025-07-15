@@ -12,7 +12,7 @@ export class PhotosController {
     constructor(private readonly PhotosService: PhotosService){}
 
     @Post('create')
-    createNewPhoto(@Body() photo: {id: string, email: string, img: string[], date: string, descript: string}) {
+    createNewPhoto(@Body() photo: {id: string, resultEmail: string, img: string[], date: string, descript: string}) {
         this.PhotosService.createPhoto(photo)
     }
 
