@@ -36,6 +36,9 @@ export class Photo {
 
   @Prop({ required: false })
   commentsPerm: boolean;
+
+  @Prop({ required: false })
+  pin: boolean;
 }
 
 export const PhotoSchema = SchemaFactory.createForClass(Photo);

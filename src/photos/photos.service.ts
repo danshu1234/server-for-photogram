@@ -23,6 +23,7 @@ export class PhotosService {
             descript: photo.descript,
             comments: [],
             commentsPerm: true,
+            pin: false,
         })
         await myPhoto.save()
     }
@@ -44,10 +45,6 @@ export class PhotosService {
         const prevLikes = findThisPhoto?.likes || []
         const newLikes = prevLikes.filter(el => el !== body.email)
         await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
-    }
-
-    async deletePhoto(body: {photoId: string}) {
-        await this.photoModel.findOneAndDelete({id: body.photoId})
     }
 
     async getAll() {
@@ -85,6 +82,14 @@ export class PhotosService {
 
     async permComments(body: {photoId: string, perm: boolean}) {
         await this.photoModel.findOneAndUpdate({id: body.photoId}, {commentsPerm: body.perm})
+    }
+
+    async pinPhoto(body: {id: string, type: boolean}) {
+        await this.photoModel.findOneAndUpdate({id: body.id}, {pin: body.type}, {new: true})
+    }
+
+    async deletePhoto(photoId: string) {
+        await this.photoModel.findOneAndDelete({id: photoId})
     }
 
   

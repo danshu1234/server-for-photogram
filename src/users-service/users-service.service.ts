@@ -5,12 +5,12 @@ import { User, UserDocument } from 'src/UserSchema';
 import { SocketGateway } from 'src/socket-getaway';
 import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
-import { find } from 'rxjs';
+import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
 export class UsersServiceService {
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService) {}
 
     async createUser(user: {resultEmail: string, code: string, resultName: string, country: string, latitude: number, longitude: number}) {
         const myUser = new this.userModel({
@@ -47,7 +47,9 @@ export class UsersServiceService {
 
     async checkFindUser(email: string) {
         const findUser = await this.userModel.findOne({email: email})
-        if (findUser !== undefined) {
+        console.log('Введенный email: ', email)
+        console.log(findUser)
+        if (findUser !== null) {
             return 'OK'
         } else {
             return 'undefined'
@@ -387,13 +389,13 @@ export class UsersServiceService {
             const formattedDate = `${day}.${month}.${year}`
             const id = date.getTime().toString()
         if (findMe?.messages) {
-            const newMessages = [...findMe.messages, {user: body.trueParamEmail, messages: [{user: body.email, text: body.inputMess, photos: body.imageBase64, date: formattedDate, id: id, ans: '', edit: false, typeMess: body.typeMessage, per: '', pin: false}], messCount: 0, pin: false}]
+            const newMessages = [...findMe.messages, {user: body.trueParamEmail, messages: [{user: body.email, text: body.inputMess, photos: body.imageBase64, date: formattedDate, id: id, ans: '', edit: false, typeMess: body.typeMessage, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
             await this.userModel.findOneAndUpdate({email: body.email}, {messages: newMessages}, {new: true})
         }
 
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         if (findFriend?.messages) {
-            const newMessages = [...findFriend.messages, {user: body.email, messages: [{user: body.email, text: body.inputMess, photos: body.imageBase64, date: formattedDate, id: id, ans: '', edit: false, typeMess: body.typeMessage, per: '', pin: false}], messCount: 1, pin: false}]
+            const newMessages = [...findFriend.messages, {user: body.email, messages: [{user: body.email, text: body.inputMess, photos: body.imageBase64, date: formattedDate, id: id, ans: '', edit: false, typeMess: body.typeMessage, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
             await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newMessages}, {new: true})
         }
     }   
@@ -654,6 +656,49 @@ export class UsersServiceService {
 
     async changeCode(body: {trueEmail: string, newCode: string}) {
         await this.userModel.findOneAndUpdate({email: body.trueEmail}, {code: body.newCode}, {new: true})
+    }
+
+    async getMessCount(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        return findUser?.messages
+    }
+
+    async getOnlineStatus(body: {trueEmail: string, trueParamEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.trueParamEmail})
+        const userSocket = findUser?.socket
+        if (userSocket !== undefined) {
+            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'onlineStatus', user: body.trueEmail, text: '', photos: [], id: '', ans: ''}})
+        }
+    }
+
+    async giveOnlineStatus(body: {userEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.userEmail})
+        const userSocket = findUser?.socket
+        if (userSocket !== undefined) {
+            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'giveOnlineStatus', user: body.userEmail, text: '', photos: [], id: '', ans: ''}})
+        }
+    }
+
+    async changeNofifs(body: {notifs: boolean, trueEmail: string, user: string}) {
+        const findUser = await this.userModel.findOne({email: body.trueEmail})
+        const newChats = findUser?.messages.map(el => {
+            if (el.user === body.user) {
+                return {
+                    ...el,
+                    notifs: body.notifs,
+                }
+            } else {
+                return el
+            }
+        })
+        await this.userModel.findOneAndUpdate({email: body.trueEmail}, {messages: newChats}, {new: true})
+    }
+
+    async verifyCode(body: {targetEmail: string, subject: string, code: string}) {
+        const to = body.targetEmail
+        const subject = body.subject
+        const text = body.code
+        await this.mailerService.sendMail({ to, subject, text })
     }
 
 }

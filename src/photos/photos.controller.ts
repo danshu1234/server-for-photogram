@@ -31,11 +31,6 @@ export class PhotosController {
         this.PhotosService.unlikePhoto(body)
     }
 
-    @Delete('delete/photo')
-    deleteUserPhoto(@Body() body: {photoId: string}) {
-        this.PhotosService.deletePhoto(body)
-    }
-
     @Get('all')
     getAllPhotos() {
         return this.PhotosService.getAll()
@@ -64,6 +59,16 @@ export class PhotosController {
     @Patch('perm/comments')
     permComments(@Body() body: {photoId: string, perm: boolean}) {
         this.PhotosService.permComments(body)
+    }
+
+    @Patch('pin/photo')
+    pinPhoto(@Body() body: {id: string, type: boolean}) {
+        this.PhotosService.pinPhoto(body)
+    }
+    
+    @Delete('delete/photo/:photoId')
+    deletePhoto(@Param('photoId') photoId: string) {
+        this.PhotosService.deletePhoto(photoId)
     }
 
 }

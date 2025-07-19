@@ -5,20 +5,34 @@ import { UsersModule } from './user.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PhotosModule } from './photo.module';
 import { SocketModule } from './getaway.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { TestingUsersModule } from './testing-users/testing-users.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailModule } from './mail.module';
 import { User } from './testing-users/user.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
-  imports: [UsersModule, MongooseModule.forRoot('mongodb+srv://myBase:malfeya227@cluster0.gfyldwo.mongodb.net/blog'), PhotosModule, MongooseModule.forRoot('mongodb+srv://kawocih390:kjU8765@cluster0.epmnoxx.mongodb.net/blog'), SocketModule,
-     TypeOrmModule.forRoot({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true, 
+    }),
+    UsersModule, MailModule,
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGO_DB_URI_1'),
+      }),
+      inject: [ConfigService],
+    }),
+    PhotosModule, SocketModule,
+    TestingUsersModule,
+    TypeOrmModule.forRoot({
       type: 'sqlite',
       database: 'db.sqlite',
       entities: [User],
       autoLoadEntities: true, 
       synchronize: true,
     }),
-    TestingUsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

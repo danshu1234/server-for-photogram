@@ -298,4 +298,29 @@ export class UsersControllerController {
         this.UsersService.changeCode(body)
     }
 
+    @Get('get/mess/count/:email')
+    getMessCount(@Param('email') email: string) {
+        return this.UsersService.getMessCount(email)
+    }
+
+    @Post('get/online/status')
+    getOnlineStatus(@Body() body: {trueEmail: string, trueParamEmail: string}) {
+        this.UsersService.getOnlineStatus(body)
+    }
+
+    @Post('give/online/status')
+    giveOnlineStatus(@Body() body: {userEmail: string}) {
+        this.UsersService.giveOnlineStatus(body)
+    }
+
+    @Patch('change/notifs')
+    changeNotifs(@Body() body: {notifs: boolean, trueEmail: string, user: string}) {
+        this.UsersService.changeNofifs(body)
+    }
+
+    @Post('verify/code')
+    verifyCode(@Body() body: {targetEmail: string, subject: string, code: string}) {
+        this.UsersService.verifyCode(body)
+    }
+
 }

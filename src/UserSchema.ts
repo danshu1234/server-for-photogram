@@ -62,6 +62,9 @@ export class Messages {
 
   @Prop({ required: true })
   pin: boolean;
+
+  @Prop({ required: true })
+  notifs: boolean;
 }
 
 @Schema()
