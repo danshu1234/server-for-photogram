@@ -25,7 +25,7 @@ export class Message {
   text: string;
 
   @Prop({ required: AnimationFrameScheduler })
-  photos: string[];
+  photos: Buffer[];
 
   @Prop({ required: true })
   date: string;
@@ -76,6 +76,9 @@ export class User {
   email: string;
 
   @Prop({ required: true })
+  password: string;
+
+  @Prop({ required: true })
   subscribes: string[];
 
   @Prop({ required: true })
@@ -99,21 +102,12 @@ export class User {
   @Prop({required: false})
   avatar: string;
 
-  @Prop({required: false})
-  country: string;
-
   @Prop({required: true})
   open: boolean;
 
   @Prop({required: false})
   permUsers: [String | boolean];
-
-  @Prop({ type: Number, required: false })
-  latitude: number | null;
-
-  @Prop({ type: Number, required: false })
-  longitude: number | null;
-
+  
   @Prop({ required: false })
   messages: Messages[];
 

@@ -7,12 +7,15 @@ export type TestingUserDocument = TestingUser & Document;
 @Schema()
 export class TestingUser {
     @Prop({ required: true })
-    id: string;
+    login: string;
 
-    @Prop({ required: true })
+    @Prop()
+    password: string;
+
+    @Prop()
     name: string;
 
-    @Prop({ required: true })
+    @Prop()
     age: number;
 }
 

@@ -17,7 +17,7 @@ export class Photo {
   id: string;
 
   @Prop({ required: true })
-  url: string[];
+  url: Buffer;
 
   @Prop({ required: true })
   likes: string[];

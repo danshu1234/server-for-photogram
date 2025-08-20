@@ -1,10 +1,7 @@
-import { Controller, Post, Body, Get, Param, Delete, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete, Patch, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { PhotosService } from './photos.service';
-
-interface Comment{
-    user: string,
-    comment: string,
-}
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 
 @Controller('photos')
 export class PhotosController {
@@ -12,13 +9,18 @@ export class PhotosController {
     constructor(private readonly PhotosService: PhotosService){}
 
     @Post('create')
-    createNewPhoto(@Body() photo: {id: string, resultEmail: string, img: string[], date: string, descript: string}) {
+    @UseInterceptors(FileInterceptor('photo'))
+    createNewPhoto(@UploadedFile() file: Express.Multer.File, @Body() body: {id: string, date: string, email: string}) {
+        const photo = {
+            file: file,
+            data: body,
+        }
         this.PhotosService.createPhoto(photo)
     }
 
-    @Get('get/user/photos/:email')
-    getUserPhoto(@Param('email') email: string) {
-        return this.PhotosService.getUserPhotoServ(email)
+    @Post('get/user/photos')
+    getUserPhoto(@Body() body: {email: string, trueParamEmail: string}) {
+        return this.PhotosService.getUserPhotoServ(body)
     }
 
     @Patch('like/this/photo')
@@ -31,14 +33,21 @@ export class PhotosController {
         this.PhotosService.unlikePhoto(body)
     }
 
-    @Get('all')
-    getAllPhotos() {
-        return this.PhotosService.getAll()
+    @Post('all')
+    getAllPhotos(@Body() body: {start: number, finish: number}) {
+        return this.PhotosService.getAll(body)
     }
 
     @Get('big/photo/:photoId')
-    getPhotoById(@Param('photoId') photoId: string) {
-        return this.PhotosService.getPhotoById(photoId)
+    async getPhotoById(@Param('photoId') photoId: string, @Res() res: Response) {
+        const resultBuffer = await this.PhotosService.getPhotoById(photoId)
+        res.setHeader('Content-Type', 'image/jpeg/png')
+        return res.send(resultBuffer)
+    }
+
+    @Get('big/photo/info/:photoId')
+    getInfo(@Param('photoId') photoId: string) {
+        return this.PhotosService.getPhotoInfo(photoId)
     }
 
     @Get('comments/:photoId')
@@ -47,7 +56,7 @@ export class PhotosController {
     }
 
     @Patch('new/comment')
-    addNewComment(@Body() body: {resultComment: Comment, targetId: string}) {
+    addNewComment(@Body() body: {email: string, targetId: string, commentInput: string}) {
         return this.PhotosService.addNewComment(body)
     }
 
@@ -57,18 +66,18 @@ export class PhotosController {
     }
 
     @Patch('perm/comments')
-    permComments(@Body() body: {photoId: string, perm: boolean}) {
-        this.PhotosService.permComments(body)
-    }
-
-    @Patch('pin/photo')
-    pinPhoto(@Body() body: {id: string, type: boolean}) {
-        this.PhotosService.pinPhoto(body)
+    permComments(@Body() body: {photoId: string, perm: boolean, email: string}) {
+        return this.PhotosService.permComments(body)
     }
     
-    @Delete('delete/photo/:photoId')
-    deletePhoto(@Param('photoId') photoId: string) {
-        this.PhotosService.deletePhoto(photoId)
+    @Delete('delete/photo')
+    deletePhoto(@Body() body: {photoId: string, email: string}) {
+        this.PhotosService.deletePhoto(body)
+    }
+
+    @Patch('delete/comment')
+    deleteComment(@Body() body: {email: string, photoId: string, comment: string}) {
+        return this.PhotosService.deleteComment(body)
     }
 
 }

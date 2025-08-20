@@ -1,26 +1,26 @@
-import { Controller, Get, Body, Post, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { UsersServiceService } from 'src/users-service/users-service.service';
 import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
+import { EmailDto } from 'src/EmailDto';
+import { UserDto } from './UserDto';
+import { NewUserDto } from 'src/NewUserDto';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('users-controller')
 export class UsersControllerController {
 
     constructor(private readonly UsersService: UsersServiceService){}
 
-    @Post('create/new/user')
-    createNewUser(@Body() user: {resultEmail: string, code: string, resultName: string, country: string, latitude: number, longitude: number}) {
-        this.UsersService.createUser(user)
+
+    @Post('enter')
+    enter(@Body() body: {login: string, password: string}) {
+        return this.UsersService.enter(body)
     }
 
-    @Get('check/user/:email')
-    checkEmailUser(@Param('email') email: string) {
-        return this.UsersService.checkUser(email)
-    }
-
-    @Get('get/code/:email')
-    getCode(@Param('email') email: string) {
-        return this.UsersService.getCode(email)
+    @Post('reg')
+    reg(@Body() user: NewUserDto) {
+        return this.UsersService.reg(user)
     }
 
     @Get('check/find/user/:email')
@@ -78,13 +78,8 @@ export class UsersControllerController {
         this.UsersService.addBannedUser(body)
     }
 
-    @Get('get/visits/:email')
-    getVisits(@Param('email') email: string) {
-        return this.UsersService.getVisits(email)
-    }
-
     @Patch('update/visits')
-    updateVisits(@Body() body: {visitsWithMe: string[], targetEmail: string}) {
+    updateVisits(@Body() body: {email: string, targetEmail: string}) {
         return this.UsersService.updateVisits(body)
     }
 
@@ -128,11 +123,6 @@ export class UsersControllerController {
         this.UsersService.newAvatar(body)
     }
 
-    @Get('get-full-data/:email')
-    getFullData(@Param('email') email: string) {
-        return this.UsersService.getFullData(email)
-    }
-
     @Get('get/all/users')
     getAllUsers() {
         return this.UsersService.getAllUsers()
@@ -173,10 +163,6 @@ export class UsersControllerController {
         return this.UsersService.getCloseUsers()
     }
 
-    @Get('check/coords/:email')
-    checkCoords(@Param('email') email: string) {
-        return this.UsersService.checkCoords(email)
-    }
 
     @Get('get/user/data/:email')
     getUserData(@Param('email') email: string) {
@@ -194,8 +180,10 @@ export class UsersControllerController {
     }
 
     @Patch('new/mess')
-    newMess(@Body() body: {newMessages: Message[], trueParamEmail: string, email: string, socketId: string, per: string}) {
-        this.UsersService.newMess(body)
+    @UseInterceptors(FilesInterceptor('photo'))
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, code: string, trueParamEmail: string, per: string}) {
+        const resultData = {...body, files: files}
+        this.UsersService.newMess(resultData)
     }
 
     @Patch('new/chat')
@@ -294,7 +282,7 @@ export class UsersControllerController {
     }
 
     @Patch('change/code')
-    changeCode(@Body() body: {trueEmail: string, newCode: string}) {
+    changeCode(@Body() body: {email: string, newCode: string}) {
         this.UsersService.changeCode(body)
     }
 
@@ -318,9 +306,14 @@ export class UsersControllerController {
         this.UsersService.changeNofifs(body)
     }
 
-    @Post('verify/code')
-    verifyCode(@Body() body: {targetEmail: string, subject: string, code: string}) {
-        this.UsersService.verifyCode(body)
+    @Get('get/visits/:email')
+    getMyVisits(@Param('email') email: string) {
+        return this.UsersService.getMyVisits(email)
+    }
+
+    @Post('validate/email')
+    validateEmail(@Body() body: EmailDto) {
+        return body.email
     }
 
 }

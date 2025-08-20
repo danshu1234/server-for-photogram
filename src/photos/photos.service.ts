@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Photo, PhotoDocument } from 'src/PhotoSchema';
+import { User, UserDocument } from 'src/UserSchema';
+import { PhotoDto } from './PhotoDto';
+import * as sharp from 'sharp';
 
 interface Comment{
     user: string,
@@ -11,53 +14,161 @@ interface Comment{
 @Injectable()
 export class PhotosService {
 
-    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>) {}
+    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
-    async createPhoto(photo: {id: string, resultEmail: string, img: string[], date: string, descript: string}) {
+    async createPhoto(photo: {file: Express.Multer.File, data: {id: string, date: string, email: string}}) {
+        const findUser = await this.userModel.findOne({code: photo.data.email})
+        let resultEmail: string = ''
+        if (findUser) {
+            resultEmail = findUser.email
+        }
+
+        const resultBuffer = await sharp(photo.file.buffer)
+        .toBuffer()
+
         const myPhoto = new this.photoModel({
-            id: photo.id,
-            url: photo.img,
-            email: photo.resultEmail,
+            id: photo.data.id,
+            url: resultBuffer,
+            email: resultEmail,
             likes: [],
-            date: photo.date,
-            descript: photo.descript,
+            date: photo.data.date,
+            descript: '',
             comments: [],
             commentsPerm: true,
             pin: false,
         })
         await myPhoto.save()
+        return 'OK'
     }
 
-    async getUserPhotoServ(email: string) {
-        const userPhotos = await this.photoModel.find({email: email})
-        return userPhotos
+    async getUserPhotoServ(body: {email: string, trueParamEmail: string}) {
+        const targetUser = await this.userModel.findOne({email: body.trueParamEmail})
+        const myUser = await this.userModel.findOne({code: body.email})
+        if (myUser) {
+            if (targetUser?.open === true || targetUser?.email === myUser?.email || targetUser?.permUsers.includes(myUser?.email)) {
+                const resultPhotos = await this.photoModel.find({email: targetUser?.email})
+                const finalPhotos = resultPhotos.reverse()
+                const resultUserPhotos = await Promise.all(finalPhotos.map(async photo => {
+                let buffer: Buffer | null = null
+                const signature = photo.url.toString('hex', 0, 8)
+                if (signature.startsWith('89504e470d0a1a0a')) {
+                    buffer = await sharp(photo.url)
+                    .resize(250, 250)
+                    .png({ quality: 70 })
+                    .toBuffer()
+                } else if (signature.startsWith('ffd8ff')) {
+                    buffer = await sharp(photo.url)
+                    .resize(250, 250)
+                    .jpeg({ quality: 70 })
+                    .toBuffer()
+                }
+                    const resultImageBase64 = `data:image/jpeg;base64,${buffer?.toString('base64')}`
+                    return {
+                        url: resultImageBase64,
+                        id: photo.id,
+                        likes: photo.likes,
+                        email: photo.email,
+                        date: photo.date,
+                        descript: photo.descript,
+                        comments: photo.comments,
+                        commentsPerm: photo.commentsPerm,
+                        pin: photo.pin,
+                    }
+                }))
+                return {
+                    type: 'photos',
+                    photos: resultUserPhotos,
+                }
+            } else {
+                const targetUserNotifs = targetUser?.notifs
+                if (targetUserNotifs) {
+                    let myCount = 0
+                    for (let item of targetUserNotifs) {
+                        if (item.type === 'perm' && item.user === myUser.email) {
+                            myCount+=1
+                        }
+                    }
+                    if (myCount !== 0) {
+                        return {
+                            type: 'send',
+                            photos: [],
+                        }
+                    } else {
+                        return {
+                            type: 'unsend',
+                            photos: [],
+                        }
+                    }
+                }
+            }
+        }
     }
 
     async likePhoto(body: {email: string, id: string}) {
         const findThisPhoto = await this.photoModel.findOne({id: body.id})
+        const findUser = await this.userModel.findOne({code: body.email})
         const prevLikes = findThisPhoto?.likes || []
-        const newLikes = [...prevLikes, body.email]
-        await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
+        if (findUser) {
+            const newLikes = [...prevLikes, findUser.email]
+            await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
+        }
     }
 
     async unlikePhoto(body: {email: string, id: string}) {
         const findThisPhoto = await this.photoModel.findOne({id: body.id})
+        const findUser = await this.userModel.findOne({code: body.email})
         const prevLikes = findThisPhoto?.likes || []
-        const newLikes = prevLikes.filter(el => el !== body.email)
-        await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
+        if (findUser) {
+            const newLikes = prevLikes.filter(el => el !== findUser.email)
+            await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
+        }
     }
 
-    async getAll() {
+    async getAll(body: {start: number, finish: number}) {
         const allPhotosArr = await this.photoModel.find()
-        return allPhotosArr
+        const targetPhotos = allPhotosArr.reverse().slice(body.start, body.finish)
+        const resultPhotos = await Promise.all(targetPhotos.map(async photo => {
+            let buffer: Buffer | null = null
+            const signature = photo.url.toString('hex', 0, 8)
+            if (signature.startsWith('89504e470d0a1a0a')) {
+                buffer = await sharp(photo.url)
+                .resize(230, 230)
+                .png({ quality: 70 })
+                .toBuffer()
+            } else if (signature.startsWith('ffd8ff')) {
+                buffer = await sharp(photo.url)
+                .resize(250, 250)
+                .jpeg({ quality: 70 })
+                .toBuffer()
+            }
+            const resultImageBase64 = `data:image/jpeg;base64,${buffer?.toString('base64')}`
+            return {
+                url: resultImageBase64,
+                id: photo.id,
+                likes: photo.likes,
+                email: photo.email,
+                date: photo.date,
+                descript: photo.descript,
+                comments: photo.comments,
+                commentsPerm: photo.commentsPerm,
+                pin: photo.pin,
+            }
+        }))
+        return {
+            photos: resultPhotos,
+            allLength: allPhotosArr.length,
+        }
     }
 
     async getPhotoById(photoId: string) {
         const findPhoto = await this.photoModel.findOne({id: photoId})
-        return {
-            url: findPhoto?.url,
-            info: findPhoto,
-        }
+        return findPhoto?.url
+    }
+
+    async getPhotoInfo(photoId: string) {
+        const findPhoto = await this.photoModel.findOne({id: photoId}).lean()
+        const resultInfo = {...findPhoto, url: ''}
+        return resultInfo
     }
 
     async getComments(photoId: string) {
@@ -65,11 +176,12 @@ export class PhotosService {
         return findPhoto?.comments
     }
 
-    async addNewComment(body: {resultComment: Comment, targetId: string}) {
+    async addNewComment(body: {email: string, targetId: string, commentInput: string}) {
+        const findUser = await this.userModel.findOne({code: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.targetId})
-        if (findPhoto?.comments) {
+        if (findPhoto?.comments && findUser) {
             const prevComments = findPhoto.comments
-            const resultComments = [...prevComments, body.resultComment]
+            const resultComments = [...prevComments, {user: findUser.email, comment: body.commentInput, userName: findUser.name}]
             await this.photoModel.findOneAndUpdate({id: body.targetId}, {comments: resultComments}, {new: true})
             return 'OK'
         }
@@ -80,16 +192,41 @@ export class PhotosService {
         return findPost
     }
 
-    async permComments(body: {photoId: string, perm: boolean}) {
-        await this.photoModel.findOneAndUpdate({id: body.photoId}, {commentsPerm: body.perm})
+    async permComments(body: {photoId: string, perm: boolean, email: string}) {
+        const findUser = await this.userModel.findOne({code: body.email})
+        const findPhoto = await this.photoModel.findOne({id: body.photoId})
+        if (findUser && findPhoto) {
+            if (findUser.email === findPhoto.email) {
+                await this.photoModel.findOneAndUpdate({id: body.photoId}, {commentsPerm: body.perm})
+                return 'OK'
+            }
+        }
     }
 
-    async pinPhoto(body: {id: string, type: boolean}) {
-        await this.photoModel.findOneAndUpdate({id: body.id}, {pin: body.type}, {new: true})
+    async deletePhoto(body: {photoId: string, email: string}) {
+        const findUser = await this.userModel.findOne({code: body.email})
+        const findPhoto = await this.photoModel.findOne({id: body.photoId})
+        if (findUser && findPhoto) {
+            if (findUser.email === findPhoto.email) {
+                await this.photoModel.findOneAndDelete({id: body.photoId})
+            }
+        }
     }
 
-    async deletePhoto(photoId: string) {
-        await this.photoModel.findOneAndDelete({id: photoId})
+    async deleteComment(body: {email: string, photoId: string, comment: string}) {
+        const findUser = await this.userModel.findOne({code: body.email})
+        const findPhoto = await this.photoModel.findOne({id: body.photoId})
+        if (findUser && findPhoto) {
+            const newComments = findPhoto.comments.map(el => {
+                if (el.user === findUser.email && el.comment === body.comment) {
+                    return false
+                } else {
+                    return el
+                }
+            }).filter(el => el !== false)
+            await this.photoModel.findOneAndUpdate({id: body.photoId}, {comments: newComments}, {new: true})
+            return 'OK'
+        }
     }
 
   

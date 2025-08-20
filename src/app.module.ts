@@ -14,9 +14,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, 
+      isGlobal: true,
     }),
-    UsersModule, MailModule,
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -24,13 +23,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       }),
       inject: [ConfigService],
     }),
-    PhotosModule, SocketModule,
+    UsersModule,
+    MailModule,
+    PhotosModule,
+    SocketModule,
     TestingUsersModule,
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: 'db.sqlite',
       entities: [User],
-      autoLoadEntities: true, 
+      autoLoadEntities: true,
       synchronize: true,
     }),
   ],
