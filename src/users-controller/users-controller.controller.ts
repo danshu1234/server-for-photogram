@@ -163,7 +163,6 @@ export class UsersControllerController {
         return this.UsersService.getCloseUsers()
     }
 
-
     @Get('get/user/data/:email')
     getUserData(@Param('email') email: string) {
         return this.UsersService.getUserData(email)
