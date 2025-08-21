@@ -187,8 +187,10 @@ export class UsersControllerController {
     }
 
     @Patch('new/chat')
-    newChat(@Body() body: {email: string, trueParamEmail: string, imageBase64: string[], inputMess: string, typeMessage: string, per: string}) {
-        this.UsersService.newChat(body)
+    @UseInterceptors(FilesInterceptor('photo'))
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, code: string, trueParamEmail: string, per: string}) {
+        const resultData = {...body, files: files}
+        this.UsersService.newChat(resultData)
     }
 
     @Patch('zero/mess')
