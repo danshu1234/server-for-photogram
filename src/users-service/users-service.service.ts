@@ -11,6 +11,7 @@ import { specialSymbols, lowercaseLetters } from 'src/PassSymbols';
 import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 import * as sharp from 'sharp';
+import { imageSize } from 'image-size';
 
 @Injectable()
 export class UsersServiceService {
@@ -367,9 +368,21 @@ export class UsersServiceService {
                 return []
             } else {
                 const resultMessages = await Promise.all(findChat.messages.map(async message => {
-                    return {
-                        ...message,
-                        photos: message.photos.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
+                    if (message.photos.length !== 0) {
+                        const resultBuffers = await Promise.all(message.photos.map(async photo => {
+                            const buffer = Buffer.from(photo.buffer);
+                            const resultBuffer = await sharp(buffer)
+                            .resize(350, 250)
+                            .jpeg({quality: 90})
+                            .toBuffer()
+                            return resultBuffer
+                        }))
+                        return {
+                            ...message,
+                            photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
+                        }
+                    } else {
+                        return message
                     }
                 }))
                 return resultMessages
