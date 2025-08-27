@@ -1,6 +1,6 @@
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
 
-export class NewUserDto {
+export class CreateUser {
     @IsNotEmpty({message: 'Пожалйуста, введите логин'})
     @MinLength(5, {message: 'Логин должен состоять не менее чем из 5 символов'})
     @IsEmail()
@@ -19,4 +19,8 @@ export class NewUserDto {
     @IsNotEmpty({message: 'Пожалйуста, введите пароль повторно'})
     @IsString()
     secondPass: string;
+
+    @IsNotEmpty({message: 'Пожалйуста, введите код'})
+    @IsString()
+    code: string;
 }

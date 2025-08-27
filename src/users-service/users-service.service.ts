@@ -2,21 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from 'src/UserSchema';
+import { Code, CodeDocument } from 'src/CodeSchema';
+import { EnterCode, EnterCodeDocument } from 'src/EnterCodeSchema';
 import { SocketGateway } from 'src/socket-getaway';
-import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
 import { MailerService } from '@nestjs-modules/mailer';
 import { NewUserDto } from 'src/NewUserDto';
+import { CreateUser } from 'src/CreateUser';
 import { specialSymbols, lowercaseLetters } from 'src/PassSymbols';
 import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 import * as sharp from 'sharp';
-import { imageSize } from 'image-size';
 
 @Injectable()
 export class UsersServiceService {
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>) {}
     async enter(body: {login: string, password: string}) {
         const err = 'ERR'
         const findUser = await this.userModel.findOne({email: body.login})
@@ -29,60 +30,6 @@ export class UsersServiceService {
             }
         } else {
             return err
-        }
-    }
-
-    async reg(user: NewUserDto) {
-        const findUser = await this.userModel.findOne({email: user.login})
-        if (!findUser) {
-            if (user.firstPass === user.secondPass) {
-                let firstCountCheck = 0
-                for (let item of specialSymbols) {
-                    if (user.firstPass.includes(item)) {
-                        firstCountCheck+=1
-                    }
-                }
-                if (firstCountCheck !== 0) {
-                    let secondCountCheck = 0
-                    for (let item of lowercaseLetters) {
-                        if (user.firstPass.includes(item)) {
-                            secondCountCheck+=1
-                        }
-                    }
-                    if (secondCountCheck !== 0) {
-                        const resultPass = await argon2.hash(user.firstPass)
-                        const resultCode = uuidv4()
-                        const myUser = new this.userModel({
-                            code: resultCode,
-                            email: user.login,
-                            password: resultPass,
-                            name: user.name,
-                            subscribes: 0,
-                            notifs: [],
-                            socket: '',
-                            visits: [],
-                            reports: [],
-                            avatar: '',
-                            open: true,
-                            permUsers: [],
-                            messages: [],
-                            permMess: 'Все',
-                            birthday: '',
-                            savePosts: [],
-                        })
-                        await myUser.save()
-                        return resultCode
-                    } else {
-                        return 'THIRD_ERR'
-                    }
-                } else {
-                    return 'THIRD_ERR'
-                }
-            } else {
-                return 'SECOND_ERR'
-            }
-        } else {
-            return 'FIRST_ERR'
         }
     }
 
@@ -579,8 +526,8 @@ export class UsersServiceService {
         return findUser?.messages.find(el => el.user === body.email)?.messCount
     }
 
-    async editMess(body: {email: string, trueParamEmail: string, editMess: string, inputMess: string}) {
-        const findMe = await this.userModel.findOne({email: body.email})
+    async editMess(body: {email: string, trueParamEmail: string, editMess: string, inputMess: string, per: string}) {
+        const findMe = await this.userModel.findOne({code: body.email})
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         const newChats = findMe?.messages.map(el => {
             if (el.user === body.trueParamEmail) {
@@ -603,7 +550,7 @@ export class UsersServiceService {
         })
 
         const newFriendChats = findFriend?.messages.map(el => {
-            if (el.user === body.email) {
+            if (el.user === findMe?.email) {
                 const newMess = el.messages.map(item => {
                     if (item.id === body.editMess) {
                         return {
@@ -619,15 +566,17 @@ export class UsersServiceService {
                     ...el,
                     messages: newMess,
                 }
+            } else {
+                return el
             }
         })
-        await this.userModel.findOneAndUpdate({email: body.email}, {messages: newChats}, {new: true})
+        await this.userModel.findOneAndUpdate({code: body.email}, {messages: newChats}, {new: true})
         await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
         if (findFriend?.socket && findMe) {
-            const findNewMe = await this.userModel.findOne({email: body.email})
+            const findNewMe = await this.userModel.findOne({code: body.email})
             if (findNewMe) {
                 if (findFriend.socket) {
-                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: body.email, text: '', photos: [], mess: findNewMe.messages.find(el => el.user === body.trueParamEmail)?.messages}})
+                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: findNewMe.messages.find(el => el.user === body.trueParamEmail)?.messages}})
                 }
             }
         }
@@ -776,6 +725,120 @@ export class UsersServiceService {
         const visitsArr = findUser?.visits
         if (visitsArr) {
             return visitsArr.length
+        }
+    }
+
+    generateCode() {
+        let resultArr: string[] = []
+        for (let i=0; i<5; i++) {
+            const randomNum = Math.floor(Math.random() * 10)
+            resultArr.push(randomNum.toString())
+        }
+        return resultArr.join('')
+    }
+
+    async sendCode(body: NewUserDto) {
+        const findThisLogin = await this.userModel.findOne({email: body.login})
+        if (!findThisLogin) {
+            if (body.firstPass === body.secondPass) {
+                let firstCountCheck = 0
+                for (let item of specialSymbols) {
+                    if (body.firstPass.includes(item)) {
+                        firstCountCheck+=1
+                    }
+                }
+                if (firstCountCheck !== 0) {
+                    let secondCountCheck = 0
+                    for (let item of lowercaseLetters) {
+                        if (body.firstPass.includes(item)) {
+                            secondCountCheck+=1
+                        }
+                    }
+                    if (secondCountCheck !== 0) {
+                        const to = body.login
+                        const subject = 'Code for Photogram'
+                        const text = this.generateCode()
+                        await this.mailerService.sendMail({ to, subject, text })
+                        const newCode = new this.codeModel({email: body.login, code: text})
+                        await newCode.save()
+                        return 'OK'
+                    } else {
+                        return 'PASS_ERR'
+                    }
+                } else {
+                    return 'PASS_ERR'
+                }
+            } else {
+                return 'SAME_PASS'
+            }
+        } else {
+            return 'LOG_OCCUPIED'
+        }
+    }
+
+    async regUser(body: CreateUser) {
+        const findThisLogin = await this.userModel.findOne({email: body.login})
+        if (!findThisLogin) {
+            if (body.firstPass === body.secondPass) {
+                const findCode = await this.codeModel.findOne({email: body.login})
+                if (findCode) {
+                    if (body.code === findCode.code) {
+                        const resultPass = await argon2.hash(body.firstPass)
+                        const resultCode = uuidv4()
+                        const myUser = new this.userModel({
+                            code: resultCode,
+                            email: body.login,
+                            password: resultPass,
+                            name: body.name,
+                            subscribes: 0,
+                            notifs: [],
+                            socket: '',
+                            visits: [],
+                            reports: [],
+                            avatar: '',
+                            open: true,
+                            permUsers: [],
+                            messages: [],
+                            permMess: 'Все',
+                            birthday: '',
+                            savePosts: [],
+                        })
+                        await myUser.save()
+                        await this.codeModel.findOneAndDelete({email: body.login})
+                        return resultCode
+                    } else {
+                        return 'ERR'
+                    }
+                }
+            }
+        }
+    }
+
+    async sendEnterCode(email: string) {
+        const findThisUser = await this.userModel.findOne({email: email})
+        if (findThisUser) {
+            const to = email
+            const subject = 'Code for Photogram'
+            const text = this.generateCode()
+            await this.mailerService.sendMail({ to, subject, text })
+            const newCode = new this.enterCodeModel({email: email, code: text})
+            await newCode.save()
+            return 'OK'
+        } else {
+            return 'ERR'
+        }
+    }
+
+    async emailEnter(body: {email: string, code: string}) {
+        const findThisEmail = await this.enterCodeModel.findOne({email: body.email})
+        if (findThisEmail) {
+            if (findThisEmail.code == body.code) {
+                const findThisUser = await this.userModel.findOne({email: body.email})
+                await this.enterCodeModel.findOneAndDelete({email: body.email})
+                return findThisUser?.code
+            } else {
+                return 'ERR'
+            }
         }
     }
 

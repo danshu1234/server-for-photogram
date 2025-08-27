@@ -5,6 +5,7 @@ import EmailAndTrueParamEmail from 'src/emailInterface';
 import { EmailDto } from 'src/EmailDto';
 import { UserDto } from './UserDto';
 import { NewUserDto } from 'src/NewUserDto';
+import { CreateUser } from 'src/CreateUser';
 import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('users-controller')
@@ -16,11 +17,6 @@ export class UsersControllerController {
     @Post('enter')
     enter(@Body() body: {login: string, password: string}) {
         return this.UsersService.enter(body)
-    }
-
-    @Post('reg')
-    reg(@Body() user: NewUserDto) {
-        return this.UsersService.reg(user)
     }
 
     @Get('check/find/user/:email')
@@ -233,7 +229,7 @@ export class UsersControllerController {
     }
 
     @Patch('edit/mess')
-    editMess(@Body() body: {email: string, trueParamEmail: string, editMess: string, inputMess: string}) {
+    editMess(@Body() body: {email: string, trueParamEmail: string, editMess: string, inputMess: string, per: string}) {
         return this.UsersService.editMess(body)
     }
 
@@ -315,6 +311,26 @@ export class UsersControllerController {
     @Post('validate/email')
     validateEmail(@Body() body: EmailDto) {
         return body.email
+    }
+
+    @Post('send/code')
+    sendCode(@Body() body: NewUserDto) {
+        return this.UsersService.sendCode(body)
+    }
+
+    @Post('reg/user')
+    regUser(@Body() body: CreateUser) {
+        return this.UsersService.regUser(body)
+    }
+
+    @Post('send/enter/code/:email') 
+    sendEnterCode(@Param('email') email: string) {
+        return this.UsersService.sendEnterCode(email)
+    }
+
+    @Post('email/enter')
+    emailEnter(@Body() body: {email: string, code: string}) {
+        return this.UsersService.emailEnter(body)
     }
 
 }
