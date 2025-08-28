@@ -842,10 +842,6 @@ export class UsersServiceService {
         }
     }
 
-    async emptyFunc() {
-        console.log('Just a function')
-    }
-
 }
 
 
