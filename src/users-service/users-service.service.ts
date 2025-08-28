@@ -443,7 +443,6 @@ export class UsersServiceService {
             this.socketGateway.handleNewMessage({targetSocket: findSocket, message: {type: 'typing', user: body.email, text: '', photos: []}})
         }
     }
-    
 
     async getBanMess(trueParamEmail: string) {
         const findUser = await this.userModel.findOne({email: trueParamEmail})
@@ -841,6 +840,10 @@ export class UsersServiceService {
                 return 'ERR'
             }
         }
+    }
+
+    async emptyFunc() {
+        console.log('Just a function')
     }
 
 }
