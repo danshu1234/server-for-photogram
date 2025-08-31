@@ -1,17 +1,41 @@
-import { Module } from '@nestjs/common'
-import { UsersServiceService } from './users-service/users-service.service'
-import { UsersControllerController } from './users-controller/users-controller.controller'
-import { User, UserSchema } from './UserSchema'
+import { Module } from '@nestjs/common';
+import { UsersServiceService } from './users-service/users-service.service';
+import { UsersControllerController } from './users-controller/users-controller.controller';
+import { User, UserSchema } from './UserSchema';
 import { Code, CodeSchema } from './CodeSchema';
 import { EnterCode, EnterCodeSchema } from './EnterCodeSchema';
-import { MongooseModule } from '@nestjs/mongoose'
-import { SocketModule } from './getaway.module'
-
+import { MongooseModule } from '@nestjs/mongoose';
+import { SocketModule } from './getaway.module';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config'; 
+import { PassportModule } from '@nestjs/passport';
 
 @Module({
     providers: [UsersServiceService],
     controllers: [UsersControllerController],
-    imports: [MongooseModule.forFeature([{name: User.name, schema: UserSchema}, {name: Code.name, schema: CodeSchema}, {name: EnterCode.name, schema: EnterCodeSchema}]), SocketModule],
+    imports: [
+        ConfigModule.forRoot({
+            isGlobal: true, 
+            envFilePath: '.env', 
+        }),
+        MongooseModule.forFeature([
+            {name: User.name, schema: UserSchema}, 
+            {name: Code.name, schema: CodeSchema}, 
+            {name: EnterCode.name, schema: EnterCodeSchema}
+        ]), 
+        SocketModule,
+        PassportModule,
+        JwtModule.registerAsync({
+            imports: [ConfigModule],
+            useFactory: async (configService: ConfigService) => ({
+                secret: configService.get<string>('JWT_SECRET'),
+                signOptions: { 
+                    expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1h') 
+                },
+            }),
+            inject: [ConfigService],
+        })
+    ],
+    exports: [JwtModule, UsersServiceService, PassportModule],
 })
-
 export class UsersModule {}

@@ -13,18 +13,20 @@ import { specialSymbols, lowercaseLetters } from 'src/PassSymbols';
 import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 import * as sharp from 'sharp';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class UsersServiceService {
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService) {}
     async enter(body: {login: string, password: string}) {
         const err = 'ERR'
         const findUser = await this.userModel.findOne({email: body.login})
         if (findUser) {
             const checkPass = await argon2.verify(findUser.password, body.password)
             if (checkPass === true) {
-                return findUser.code
+                const token = this.jwtService.sign({email: findUser.email})
+                return token
             } else {
                 return err
             }
@@ -35,8 +37,6 @@ export class UsersServiceService {
 
     async checkFindUser(email: string) {
         const findUser = await this.userModel.findOne({email: email})
-        console.log('Введенный email: ', email)
-        console.log(findUser)
         if (findUser !== null) {
             return 'OK'
         } else {
@@ -45,11 +45,10 @@ export class UsersServiceService {
     }
 
     async getSubs(email: string) {
-        const findThisUser = await this.userModel.findOne({code: email})
+        const findThisUser = await this.userModel.findOne({email: email})
         const subsAndCountryData = {
             subscribes: findThisUser?.subscribes,
         }
-        console.log(subsAndCountryData)
         return subsAndCountryData
     }
 
@@ -78,11 +77,6 @@ export class UsersServiceService {
             }
         }
     }   
-
-    async getEmail(code: string) {
-        const findUser = await this.userModel.findOne({code: code})
-        return findUser?.email
-    }
 
     async sub(body: {targetEmail: string, resultEmail: string}) {
         const arrFromEmail = body.targetEmail.split('')
@@ -120,7 +114,7 @@ export class UsersServiceService {
     }
 
     async getNotifs(email: string) {
-        const findUser = await this.userModel.findOne({code: email})
+        const findUser = await this.userModel.findOne({email: email})
         if (findUser?.notifs.length === 0) {
             return []
         } else {
@@ -144,12 +138,12 @@ export class UsersServiceService {
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
     }
 
-    async clearNotifs(body: {email: string}) {
-        const findUser = await this.userModel.findOne({code: body.email})
+    async clearNotifs(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
         const userNotifs = findUser?.notifs
         if (userNotifs) {
             const resultNotifs = userNotifs.filter(el => el.type === 'perm')
-            await this.userModel.findOneAndUpdate({code: body.email}, {notifs: resultNotifs}, {new: true})
+            await this.userModel.findOneAndUpdate({email: email}, {notifs: resultNotifs}, {new: true})
             return resultNotifs
         }
     }
@@ -209,7 +203,7 @@ export class UsersServiceService {
     }
 
     async getAva(email: string) {
-        const findUser = await this.userModel.findOne({code: email})
+        const findUser = await this.userModel.findOne({email: email})
         if (findUser?.avatar === '') {
             return ''
         } else {
@@ -218,26 +212,26 @@ export class UsersServiceService {
     }
 
     async newAvatar(body: {targetEmail: string, newAva: string}) {
-        await this.userModel.findOneAndUpdate({code: body.targetEmail}, {avatar: body.newAva}, {new: true})
+        await this.userModel.findOneAndUpdate({email: body.targetEmail}, {avatar: body.newAva}, {new: true})
     }
 
     async getAllUsers() {
-        const allUsers = await this.userModel.find({}, {code: 0, messages: 0, password: 0})
+        const allUsers = await this.userModel.find({}, {messages: 0, password: 0})
         return allUsers
     }
 
     async checkOpen(email: string) {
-        const findUser = await this.userModel.findOne({code: email})
+        const findUser = await this.userModel.findOne({email: email})
         return findUser?.open
     }
 
-    async closeAcc(body: {email: string}) {
-        await this.userModel.findOneAndUpdate({code: body.email}, {open: false}, {new: true})
+    async closeAcc(email: string) {
+        await this.userModel.findOneAndUpdate({email: email}, {open: false}, {new: true})
         return 'OK'
     }
 
-    async openAcc(body: {email: string}) {
-        await this.userModel.findOneAndUpdate({code: body.email}, {open: true}, {new: true})
+    async openAcc(email: string) {
+        await this.userModel.findOneAndUpdate({email: email}, {open: true}, {new: true})
         return 'OK'
     }
 
@@ -784,9 +778,7 @@ export class UsersServiceService {
                 if (findCode) {
                     if (body.code === findCode.code) {
                         const resultPass = await argon2.hash(body.firstPass)
-                        const resultCode = uuidv4()
                         const myUser = new this.userModel({
-                            code: resultCode,
                             email: body.login,
                             password: resultPass,
                             name: body.name,
@@ -805,7 +797,8 @@ export class UsersServiceService {
                         })
                         await myUser.save()
                         await this.codeModel.findOneAndDelete({email: body.login})
-                        return resultCode
+                        const token = this.jwtService.sign({email: body.login})
+                        return token
                     } else {
                         return 'ERR'
                     }
@@ -835,7 +828,10 @@ export class UsersServiceService {
             if (findThisEmail.code == body.code) {
                 const findThisUser = await this.userModel.findOne({email: body.email})
                 await this.enterCodeModel.findOneAndDelete({email: body.email})
-                return findThisUser?.code
+                if (findThisUser) {
+                    const token = this.jwtService.sign({email: findThisUser.email})
+                    return token
+                }
             } else {
                 return 'ERR'
             }

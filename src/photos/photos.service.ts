@@ -5,6 +5,7 @@ import { Photo, PhotoDocument } from 'src/PhotoSchema';
 import { User, UserDocument } from 'src/UserSchema';
 import { PhotoDto } from './PhotoDto';
 import * as sharp from 'sharp';
+import { JwtService } from '@nestjs/jwt';
 
 interface Comment{
     user: string,
@@ -14,14 +15,11 @@ interface Comment{
 @Injectable()
 export class PhotosService {
 
-    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>) {}
+    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, private jwtService: JwtService) {}
 
     async createPhoto(photo: {file: Express.Multer.File, data: {id: string, date: string, email: string}}) {
-        const findUser = await this.userModel.findOne({code: photo.data.email})
-        let resultEmail: string = ''
-        if (findUser) {
-            resultEmail = findUser.email
-        }
+        const userEmail = this.jwtService.verify(photo.data.email)
+        let resultEmail: string = userEmail.email
 
         const resultBuffer = await sharp(photo.file.buffer)
         .toBuffer()
@@ -43,9 +41,7 @@ export class PhotosService {
 
     async getUserPhotoServ(body: {email: string, trueParamEmail: string}) {
         const targetUser = await this.userModel.findOne({email: body.trueParamEmail})
-        const myUser = await this.userModel.findOne({code: body.email})
-        if (myUser) {
-            if (targetUser?.open === true || targetUser?.email === myUser?.email || targetUser?.permUsers.includes(myUser?.email)) {
+            if (targetUser?.open === true || targetUser?.email === body.email || targetUser?.permUsers.includes(body.email)) {
                 const resultPhotos = await this.photoModel.find({email: targetUser?.email})
                 const finalPhotos = resultPhotos.reverse()
                 const resultUserPhotos = await Promise.all(finalPhotos.map(async photo => {
@@ -84,7 +80,7 @@ export class PhotosService {
                 if (targetUserNotifs) {
                     let myCount = 0
                     for (let item of targetUserNotifs) {
-                        if (item.type === 'perm' && item.user === myUser.email) {
+                        if (item.type === 'perm' && item.user === body.email) {
                             myCount+=1
                         }
                     }
@@ -101,27 +97,20 @@ export class PhotosService {
                     }
                 }
             }
-        }
     }
 
     async likePhoto(body: {email: string, id: string}) {
         const findThisPhoto = await this.photoModel.findOne({id: body.id})
-        const findUser = await this.userModel.findOne({code: body.email})
         const prevLikes = findThisPhoto?.likes || []
-        if (findUser) {
-            const newLikes = [...prevLikes, findUser.email]
+            const newLikes = [...prevLikes, body.email]
             await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
-        }
     }
 
     async unlikePhoto(body: {email: string, id: string}) {
         const findThisPhoto = await this.photoModel.findOne({id: body.id})
-        const findUser = await this.userModel.findOne({code: body.email})
         const prevLikes = findThisPhoto?.likes || []
-        if (findUser) {
-            const newLikes = prevLikes.filter(el => el !== findUser.email)
+            const newLikes = prevLikes.filter(el => el !== body.email)
             await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
-        }
     }
 
     async getAll(body: {start: number, finish: number}) {

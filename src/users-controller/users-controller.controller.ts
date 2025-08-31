@@ -1,4 +1,4 @@
-import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request } from '@nestjs/common';
 import { UsersServiceService } from 'src/users-service/users-service.service';
 import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
@@ -7,6 +7,7 @@ import { UserDto } from './UserDto';
 import { NewUserDto } from 'src/NewUserDto';
 import { CreateUser } from 'src/CreateUser';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from 'jwt-auth.guard';
 
 @Controller('users-controller')
 export class UsersControllerController {
@@ -24,9 +25,10 @@ export class UsersControllerController {
         return this.UsersService.checkFindUser(email)
     }
 
-    @Get('all/subs/and/country/:email')
-    getAllSubs(@Param('email') email: string) {
-        return this.UsersService.getSubs(email)
+    @Get('all/subs/and/country')
+    @UseGuards(JwtAuthGuard)
+    getAllSubs(@Request() req) {
+        return this.UsersService.getSubs(req.user.email)
     }
 
     @Patch('unsub')
@@ -49,9 +51,10 @@ export class UsersControllerController {
         this.UsersService.clearSocket(body)
     }
 
-    @Get('get/notifs/:email')
-    getNotifs(@Param('email') email: string) {
-        return this.UsersService.getNotifs(email)
+    @Get('get/notifs')
+    @UseGuards(JwtAuthGuard)
+    getNotifs(@Request() req) {
+        return this.UsersService.getNotifs(req.user.email)
     }
 
     @Patch('new/notif')
@@ -60,8 +63,9 @@ export class UsersControllerController {
     }
 
     @Patch('clear/notifs')
-    clearNotifs(@Body() body: {email: string}) {
-        return this.UsersService.clearNotifs(body)
+    @UseGuards(JwtAuthGuard)
+    clearNotifs(@Request() req) {
+        return this.UsersService.clearNotifs(req.user.email)
     }
 
     @Get('get/banned/users/:email')
@@ -104,18 +108,23 @@ export class UsersControllerController {
         return this.UsersService.getName(email)
     }
 
-    @Get('get/email/:code')
-    getEmail(@Param('code') code: string) {
-        return this.UsersService.getEmail(code)
+    @Get('get/email')
+    @UseGuards(JwtAuthGuard)
+    getEmail(@Request() req) {
+        return req.user.email
     }
 
-    @Get('get/avatar/:email')
-    getAva(@Param('email') email: string) {
-        return this.UsersService.getAva(email)
+    @Get('get/avatar')
+    @UseGuards(JwtAuthGuard)
+    getAva(@Request() req) {
+        return this.UsersService.getAva(req.user.email)
     }
 
     @Patch('new/avatar')
-    newAvatar(@Body() body: {targetEmail: string, newAva: string}) {
+    @UseGuards(JwtAuthGuard)
+    newAvatar(@Body() data: {newAva: string}, @Request() req) {
+        const resultEmail: string = req.user.email
+        const body = {targetEmail: resultEmail, newAva: data.newAva}
         this.UsersService.newAvatar(body)
     }
 
@@ -124,19 +133,22 @@ export class UsersControllerController {
         return this.UsersService.getAllUsers()
     }
 
-    @Get('check/open/:email')
-    checkOpen(@Param('email') email: string) {
-        return this.UsersService.checkOpen(email)
+    @Get('check/open')
+    @UseGuards(JwtAuthGuard)
+    checkOpen(@Request() req) {
+        return this.UsersService.checkOpen(req.user.email)
     }
 
     @Patch('close/acc')
-    closeAcc(@Body() body: {email: string}) {
-        return this.UsersService.closeAcc(body)
+    @UseGuards(JwtAuthGuard)
+    closeAcc(@Request() req) {
+        return this.UsersService.closeAcc(req.user.email)
     }
 
     @Patch('open/acc')
-    openAcc(@Body() body: {email: string}) {
-        return this.UsersService.openAcc(body)
+    @UseGuards(JwtAuthGuard)
+    openAcc(@Request() req) {
+        return this.UsersService.openAcc(req.user.email)
     }
 
     @Patch('check/perm/status')
@@ -331,6 +343,12 @@ export class UsersControllerController {
     @Post('email/enter')
     emailEnter(@Body() body: {email: string, code: string}) {
         return this.UsersService.emailEnter(body)
+    }
+
+    @Post('check/token')
+    @UseGuards(JwtAuthGuard)
+    checkToken(@Request() req) {
+        return 'OK'
     }
 
 }

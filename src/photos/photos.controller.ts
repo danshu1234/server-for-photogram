@@ -1,7 +1,8 @@
-import { Controller, Post, Body, Get, Param, Delete, Patch, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete, Patch, UseInterceptors, UploadedFile, Res, UseGuards, Request } from '@nestjs/common';
 import { PhotosService } from './photos.service';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { JwtAuthGuard } from 'jwt-auth.guard';
 
 @Controller('photos')
 export class PhotosController {
@@ -19,17 +20,23 @@ export class PhotosController {
     }
 
     @Post('get/user/photos')
-    getUserPhoto(@Body() body: {email: string, trueParamEmail: string}) {
+    @UseGuards(JwtAuthGuard)
+    getUserPhoto(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.PhotosService.getUserPhotoServ(body)
     }
 
     @Patch('like/this/photo')
-    likeThisPhoto(@Body() body: {email: string, id: string}) {
+    @UseGuards(JwtAuthGuard)
+    likeThisPhoto(@Body() data: {id: string}, @Request() req) {
+        const body = {email: req.user.email, id: data.id}
         this.PhotosService.likePhoto(body)
     }
 
     @Patch('unlike/photo')
-    unlikeThisPhoto(@Body() body: {email: string, id: string}) {
+    @UseGuards(JwtAuthGuard)
+    unlikeThisPhoto(@Body() data: {id: string}, @Request() req) {
+        const body = {email: req.user.email, id: data.id}
         this.PhotosService.unlikePhoto(body)
     }
 
