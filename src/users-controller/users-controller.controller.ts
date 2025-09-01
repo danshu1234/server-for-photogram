@@ -58,7 +58,14 @@ export class UsersControllerController {
     }
 
     @Patch('new/notif')
-    newNotif(@Body() body: {resultEmail: string, userEmail: string, photoId?: string, type: string}) {
+    @UseGuards(JwtAuthGuard)
+    newNotif(@Body() data: {userEmail: string, photoId?: string, type: string}, @Request() req) {
+        let body: any = null
+        if (data.photoId) {
+            body = {resultEmail: req.user.email, userEmail: data.userEmail, photoId: data.photoId, type: data.type}
+        } else {
+            body = {resultEmail: req.user.email, userEmail: data.userEmail, type: data.type}
+        }
         this.UsersService.newNotif(body)
     }
 
@@ -157,12 +164,16 @@ export class UsersControllerController {
     }
 
     @Patch('new/perm/user')
-    newPermUser(@Body() body: {newUserEmail: string, email: string}) {
+    @UseGuards(JwtAuthGuard)
+    newPermUser(@Body() data: {newUserEmail: string}, @Request() req) {
+        const body = {newUserEmail: data.newUserEmail, email: req.data.email}
         this.UsersService.newPermUser(body)
     }
 
     @Patch('delete/perm')
-    deletePerm(@Body() body: {user: string, email: string}) {
+    @UseGuards(JwtAuthGuard)
+    deletePerm(@Body() data: {user: string}, @Request() req) {
+        const body = {user: data.user, email: req.user.email}
         return this.UsersService.deletePerm(body)
     }
 
