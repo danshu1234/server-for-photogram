@@ -66,7 +66,7 @@ export class UsersServiceService {
         })
         const resultArr = newArrFromEmail.filter(el => el !== '')
         const resultEmail = resultArr.join('')
-        const findUser = await this.userModel.findOne({code: body.resultEmail})
+        const findUser = await this.userModel.findOne({email: body.resultEmail})
         if (findUser) {
             const findTargetUser = await this.userModel.findOne({email: resultEmail})
             const targetSubs = findTargetUser?.subscribes
@@ -92,7 +92,7 @@ export class UsersServiceService {
         })
         const resultArr = newArrFromEmail.filter(el => el !== '')
         const resultEmail = resultArr.join('')
-        const findUser = await this.userModel.findOne({code: body.resultEmail})
+        const findUser = await this.userModel.findOne({email: body.resultEmail})
         if (findUser) {
             const findTargetUser = await this.userModel.findOne({email: resultEmail})
             const targetSubs = findTargetUser?.subscribes
@@ -104,8 +104,7 @@ export class UsersServiceService {
     }
 
     async addSocket(body: {email: string, socketId: string}) {
-        console.log(body.email)
-        await this.userModel.findOneAndUpdate({code: body.email}, {socket: body.socketId}, {new: true})
+        await this.userModel.findOneAndUpdate({email: body.email}, {socket: body.socketId}, {new: true})
     }
 
     async clearSocket(body: {email: string}) {
@@ -256,10 +255,10 @@ export class UsersServiceService {
     }
 
     async newPermUser(body: {newUserEmail: string, email: string}) {
-        const findMe = await this.userModel.findOne({code: body.email})
+        const findMe = await this.userModel.findOne({email: body.email})
         if (findMe?.permUsers) {
             const resultPermArr = [...findMe.permUsers, body.newUserEmail]
-            await this.userModel.findOneAndUpdate({code: body.email}, {permUsers: resultPermArr}, {new: true})
+            await this.userModel.findOneAndUpdate({email: body.email}, {permUsers: resultPermArr}, {new: true})
         }
     }
 
@@ -296,12 +295,12 @@ export class UsersServiceService {
     }
 
     async getChats(email: string) {
-        const findUser = await this.userModel.findOne({code: email})
+        const findUser = await this.userModel.findOne({email: email})
         return findUser?.messages
     }
 
     async getMess(body: EmailAndTrueParamEmail) {
-        const findUser = await this.userModel.findOne({code: body.email}).lean()
+        const findUser = await this.userModel.findOne({email: body.email}).lean()
         if (findUser?.messages) {
             const findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
             if (findChat === undefined) {
@@ -330,9 +329,9 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, code: string, trueParamEmail: string, files: Express.Multer.File[]}) {
+    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
-        const findMe = await this.userModel.findOne({code: resultData.code})
+        const findMe = await this.userModel.findOne({email: resultData.email})
         if (findFriend?.email !== findMe?.email) {
             const newMessages = findFriend?.messages.map(el => {
             if (el.user !== findMe?.email) {
@@ -357,7 +356,7 @@ export class UsersServiceService {
                 }
             }
         })
-        await this.userModel.findOneAndUpdate({code: resultData.code}, {messages: newMessagesForMe}, {new: true})
+        await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessagesForMe}, {new: true})
 
         let resultPhotos: any = []
 
@@ -389,8 +388,8 @@ export class UsersServiceService {
         }
     }
 
-    async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, code: string, trueParamEmail: string, files: Express.Multer.File[]}) {
-        const findMe = await this.userModel.findOne({code: resultData.code})
+    async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
+        const findMe = await this.userModel.findOne({email: resultData.email})
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         if (findMe?.email !== findFriend?.email) {
             const date = new Date(); 
@@ -401,7 +400,7 @@ export class UsersServiceService {
             const id = date.getTime().toString()
             if (findMe?.messages) {
                 const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
-                await this.userModel.findOneAndUpdate({code: resultData.code}, {messages: newMessages}, {new: true})
+                await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessages}, {new: true})
             }
 
             if (findFriend?.messages) {
@@ -412,7 +411,7 @@ export class UsersServiceService {
     }   
 
     async zeroMess(body: EmailAndTrueParamEmail) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const userMess = findUser?.messages
         if (userMess) {
             const newMess = userMess.map(el => {
@@ -425,7 +424,7 @@ export class UsersServiceService {
                     return el
                 }
             })
-            await this.userModel.findOneAndUpdate({code: body.email}, {messages: newMess}, {new: true})
+            await this.userModel.findOneAndUpdate({email: body.email}, {messages: newMess}, {new: true})
         }
     }
 
@@ -448,10 +447,10 @@ export class UsersServiceService {
     }
 
     async banUser(body: EmailAndTrueParamEmail) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const prevBanUsers = findUser?.banMess
         if (prevBanUsers) {
-            await this.userModel.findOneAndUpdate({code: body.email}, {banMess: [...prevBanUsers, body.trueParamEmail]}, {new: true})
+            await this.userModel.findOneAndUpdate({email: body.email}, {banMess: [...prevBanUsers, body.trueParamEmail]}, {new: true})
         }
     }
 
@@ -520,7 +519,7 @@ export class UsersServiceService {
     }
 
     async editMess(body: {email: string, trueParamEmail: string, editMess: string, inputMess: string, per: string}) {
-        const findMe = await this.userModel.findOne({code: body.email})
+        const findMe = await this.userModel.findOne({email: body.email})
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         const newChats = findMe?.messages.map(el => {
             if (el.user === body.trueParamEmail) {
@@ -563,10 +562,10 @@ export class UsersServiceService {
                 return el
             }
         })
-        await this.userModel.findOneAndUpdate({code: body.email}, {messages: newChats}, {new: true})
+        await this.userModel.findOneAndUpdate({email: body.email}, {messages: newChats}, {new: true})
         await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
         if (findFriend?.socket && findMe) {
-            const findNewMe = await this.userModel.findOne({code: body.email})
+            const findNewMe = await this.userModel.findOne({email: body.email})
             if (findNewMe) {
                 if (findFriend.socket) {
                     this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: findNewMe.messages.find(el => el.user === body.trueParamEmail)?.messages}})
@@ -581,7 +580,7 @@ export class UsersServiceService {
     }
 
     async newMessPerm(body: {email: string, changePerm: string}) {
-        await this.userModel.findOneAndUpdate({code: body.email}, {permMess: body.changePerm}, {new: true})
+        await this.userModel.findOneAndUpdate({email: body.email}, {permMess: body.changePerm}, {new: true})
     }
 
     async getPermData(body: EmailAndTrueParamEmail) {
@@ -611,7 +610,7 @@ export class UsersServiceService {
     }
 
     async pinChat(body: {user: string, pin: boolean, email: string}) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const newUserChats = findUser?.messages.map(el => {
             if (el.user !== body.user) {
                 return el
@@ -622,7 +621,7 @@ export class UsersServiceService {
                 }
             }
         })
-        await this.userModel.findOneAndUpdate({code: body.email}, {messages: newUserChats}, {new: true})
+        await this.userModel.findOneAndUpdate({email: body.email}, {messages: newUserChats}, {new: true})
         return newUserChats
     }
 

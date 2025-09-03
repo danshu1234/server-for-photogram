@@ -32,17 +32,23 @@ export class UsersControllerController {
     }
 
     @Patch('unsub')
-    unSubUser(@Body() body: {targetEmail: string, resultEmail: string}) {
+    @UseGuards(JwtAuthGuard)
+    unSubUser(@Body() data: {targetEmail: string}, @Request() req) {
+        const body = {targetEmail: data.targetEmail, resultEmail: req.user.email}
         this.UsersService.unSub(body)
     }
 
     @Patch('sub')
-    subUser(@Body() body: {targetEmail: string, resultEmail: string}) {
+    @UseGuards(JwtAuthGuard)
+    subUser(@Body() data: {targetEmail: string}, @Request() req) {
+        const body = {targetEmail: data.targetEmail, resultEmail: req.user.email}
         this.UsersService.sub(body)
     }
 
     @Patch('add/socket')
-    addSocket(@Body() body: {email: string , socketId: string}) {
+    @UseGuards(JwtAuthGuard)
+    addSocket(@Body() data: {socketId: string}, @Request() req) {
+        const body = {socketId: data.socketId, email: req.user.email}
         this.UsersService.addSocket(body)
     }
 
@@ -96,7 +102,9 @@ export class UsersControllerController {
     }
 
     @Patch('new/report')
-    newReport(@Body() body: {targetEmail: string, email: string}) {
+    @UseGuards(JwtAuthGuard)
+    newReport(@Body() data: {targetEmail: string}, @Request() req) {
+        const body = {targetEmail: data.targetEmail, email: req.user.email}
         this.UsersService.newReport(body)
     }
 
@@ -166,7 +174,7 @@ export class UsersControllerController {
     @Patch('new/perm/user')
     @UseGuards(JwtAuthGuard)
     newPermUser(@Body() data: {newUserEmail: string}, @Request() req) {
-        const body = {newUserEmail: data.newUserEmail, email: req.data.email}
+        const body = {newUserEmail: data.newUserEmail, email: req.user.email}
         this.UsersService.newPermUser(body)
     }
 
@@ -187,37 +195,46 @@ export class UsersControllerController {
         return this.UsersService.getUserData(email)
     }
 
-    @Get('get/chats/:email')
-    getChats(@Param('email') email: string) {
-        return this.UsersService.getChats(email)
+    @Get('get/chats')
+    @UseGuards(JwtAuthGuard)
+    getChats(@Request() req) {
+        return this.UsersService.getChats(req.user.email)
     }
 
     @Post('get/mess')
-    getMess(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    getMess(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         return this.UsersService.getMess(body)
     }
 
     @Patch('new/mess')
+    @UseGuards(JwtAuthGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, code: string, trueParamEmail: string, per: string}) {
-        const resultData = {...body, files: files}
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
+        const resultData = {...body, files: files, email: req.user.email}
         this.UsersService.newMess(resultData)
     }
 
     @Patch('new/chat')
+    @UseGuards(JwtAuthGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, code: string, trueParamEmail: string, per: string}) {
-        const resultData = {...body, files: files}
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
+        const resultData = {...body, files: files, email: req.user.email}
         this.UsersService.newChat(resultData)
     }
 
     @Patch('zero/mess')
-    zeroMess(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    zeroMess(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.zeroMess(body)
     }
 
     @Post('typing')
-    typing(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    typing(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.typingUser(body)
     }
 
@@ -226,18 +243,21 @@ export class UsersControllerController {
         return this.UsersService.getBanMess(trueParamEmail)
     }
 
-    @Get('get/my/ban/mess/:email')
-    getMyBanMess(@Param('email') email: string) {
-        return this.UsersService.getBanMess(email)
+    @Get('get/my/ban/mess')
+    getMyBanMess(@Request() req) {
+        return this.UsersService.getBanMess(req.user.email)
     }
 
     @Patch('ban/user')
-    banUser(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    banUser(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.banUser(body)
     }
 
     @Patch('unban/user')
-    unbanUser(@Body() body: EmailAndTrueParamEmail) {
+    unbanUser(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.unbanUser(body)
     }
 
@@ -252,37 +272,48 @@ export class UsersControllerController {
     }
 
     @Patch('edit/mess')
-    editMess(@Body() body: {email: string, trueParamEmail: string, editMess: string, inputMess: string, per: string}) {
+    editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string}, @Request() req) {
+        const body = {...data, email: req.user.email}
         return this.UsersService.editMess(body)
     }
 
-    @Get('get/perm/mess/:email')
-    getPerm(@Param('email') email: string) {
-        return this.UsersService.getPerm(email)
+    @Get('get/perm/mess')
+    @UseGuards(JwtAuthGuard)
+    getPerm(@Request() req) {
+        return this.UsersService.getPerm(req.user.email)
     }
 
     @Patch('new/perm/mess')
-    newMessPerm(@Body() body: {email: string, changePerm: string}) {
+    @UseGuards(JwtAuthGuard)
+    newMessPerm(@Body() data: {changePerm: string}, @Request() req) {
+        const body = {changePerm: data.changePerm, email: req.user.data}
         this.UsersService.newMessPerm(body)
     }
 
     @Post('get/perm/data')
-    getPermData(@Body() body: EmailAndTrueParamEmail) {
+    getPermData(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         return this.UsersService.getPermData(body)
     }
 
     @Post('start/voice')
-    startVoice(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    startVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.startVoice(body)
     }
 
     @Post('stop/voice')
-    stopVoice(@Body() body: EmailAndTrueParamEmail) {
+    @UseGuards(JwtAuthGuard)
+    stopVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.stopVoice(body)
     }
 
     @Patch('pin/chat')
-    pinChat(@Body() body: {user: string, pin: boolean, email: string}) {
+    @UseGuards(JwtAuthGuard)
+    pinChat(@Body() data: {user: string, pin: boolean}, @Request() req) {
+        const body = {user: data.user, pin: data.pin, email: req.user.email}
         return this.UsersService.pinChat(body)
     }
 
@@ -322,7 +353,9 @@ export class UsersControllerController {
     }
 
     @Patch('change/notifs')
-    changeNotifs(@Body() body: {notifs: boolean, trueEmail: string, user: string}) {
+    @UseGuards(JwtAuthGuard)
+    changeNotifs(@Body() data: {notifs: boolean, user: string}, @Request() req) {
+        const body = {notifs: data.notifs, user: data.user, trueEmail: req.user.email}
         this.UsersService.changeNofifs(body)
     }
 
