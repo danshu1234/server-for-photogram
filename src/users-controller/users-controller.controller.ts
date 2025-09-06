@@ -244,6 +244,7 @@ export class UsersControllerController {
     }
 
     @Get('get/my/ban/mess')
+    @UseGuards(JwtAuthGuard)
     getMyBanMess(@Request() req) {
         return this.UsersService.getBanMess(req.user.email)
     }
@@ -291,6 +292,7 @@ export class UsersControllerController {
     }
 
     @Post('get/perm/data')
+    @UseGuards(JwtAuthGuard)
     getPermData(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         return this.UsersService.getPermData(body)

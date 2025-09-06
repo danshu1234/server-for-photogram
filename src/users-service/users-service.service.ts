@@ -13,6 +13,7 @@ import { specialSymbols, lowercaseLetters } from 'src/PassSymbols';
 import * as argon2 from 'argon2';
 import * as sharp from 'sharp';
 import { JwtService } from '@nestjs/jwt';
+import * as CryptoJS from 'crypto-js';
 
 @Injectable()
 export class UsersServiceService {
@@ -296,35 +297,80 @@ export class UsersServiceService {
 
     async getChats(email: string) {
         const findUser = await this.userModel.findOne({email: email})
-        return findUser?.messages
+        if (findUser) {
+            const resultChats = findUser.messages.map(chat => {
+                return {
+                    ...chat,
+                    messages: chat.messages.map(message => {
+                        if (message.text === '') {
+                            return message
+                        } else {
+                            if (process.env.ENCRYPTION_KEY) {
+                                const resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                                return {
+                                    ...message,
+                                    text: resultText,
+                                }
+                            }
+                        }
+                    })
+                }
+            })
+            return resultChats
+        }
     }
 
     async getMess(body: EmailAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email}).lean()
-        if (findUser?.messages) {
-            const findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
-            if (findChat === undefined) {
-                return []
-            } else {
-                const resultMessages = await Promise.all(findChat.messages.map(async message => {
-                    if (message.photos.length !== 0) {
-                        const resultBuffers = await Promise.all(message.photos.map(async photo => {
-                            const buffer = Buffer.from(photo.buffer);
-                            const resultBuffer = await sharp(buffer)
-                            .resize(350, 250)
-                            .jpeg({quality: 90})
-                            .toBuffer()
-                            return resultBuffer
-                        }))
-                        return {
-                            ...message,
-                            photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
-                        }
+        if (findUser) {
+            if (findUser.messages) {
+                let findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
+                if (findChat) {
+                    const resultMessages = findChat?.messages.map(el => {
+                    let resultText: string = ''
+                    if (process.env.ENCRYPTION_KEY && el.text !== '') {
+                        resultText = CryptoJS.AES.decrypt(el.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
                     } else {
-                        return message
+                        resultText = ''
                     }
-                }))
-                return resultMessages
+                    return {
+                        ...el,
+                        text: resultText,
+                    }
+                    })
+                    findChat = {
+                        ...findChat,
+                        messages: resultMessages,
+                    }
+                    if (findChat === undefined) {
+                        return []
+                    } else {
+                        const resultMessages = await Promise.all(findChat.messages.map(async message => {
+                            if (message.photos.length !== 0) {
+                                const resultBuffers = await Promise.all(message.photos.map(async photo => {
+                                    const buffer = Buffer.from(photo.buffer);
+                                    const resultBuffer = await sharp(buffer)
+                                    .resize(350, 250)
+                                    .jpeg({quality: 90})
+                                    .toBuffer()
+                                    return resultBuffer
+                                }))
+                                let resultText: string = ''
+                                if (process.env.ENCRYPTION_KEY) {
+                                    resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                                }
+                                return {
+                                    ...message,
+                                    text: resultText,
+                                    photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
+                                }
+                            } else {
+                                return message
+                            }
+                        }))
+                        return resultMessages
+                    }
+                }
             }
         }
     }
@@ -332,6 +378,10 @@ export class UsersServiceService {
     async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
+        let resultEncryptedText: string = ''
+        if (process.env.ENCRYPTION_KEY) {
+            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
+        }
         if (findFriend?.email !== findMe?.email) {
             const newMessages = findFriend?.messages.map(el => {
             if (el.user !== findMe?.email) {
@@ -339,7 +389,7 @@ export class UsersServiceService {
             } else {
                 return {
                     ...el,
-                    messages: [...el.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                    messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                     messCount: el.messCount + 1,
                 }
             }
@@ -352,7 +402,7 @@ export class UsersServiceService {
             } else {
                 return {
                     ...el,
-                    messages: [...el.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                    messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                 }
             }
         })
@@ -391,6 +441,10 @@ export class UsersServiceService {
     async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
         const findMe = await this.userModel.findOne({email: resultData.email})
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
+        let resultEncryptedText: string = ''
+        if (process.env.ENCRYPTION_KEY) {
+            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
+        }
         if (findMe?.email !== findFriend?.email) {
             const date = new Date(); 
             const day = date.getDate().toString().padStart(2, '0'); 
@@ -399,12 +453,12 @@ export class UsersServiceService {
             const formattedDate = `${day}.${month}.${year}`
             const id = date.getTime().toString()
             if (findMe?.messages) {
-                const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
+                const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
                 await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessages}, {new: true})
             }
 
             if (findFriend?.messages) {
-                const newMessages = [...findFriend.messages, {user: findMe?.email, messages: [{user: findMe?.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
+                const newMessages = [...findFriend.messages, {user: findMe?.email, messages: [{user: findMe?.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
                 await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
             }
         }
