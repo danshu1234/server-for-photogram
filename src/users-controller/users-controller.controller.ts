@@ -273,8 +273,9 @@ export class UsersControllerController {
     }
 
     @Patch('edit/mess')
+    @UseGuards(JwtAuthGuard)
     editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string}, @Request() req) {
-        const body = {...data, email: req.user.email}
+        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email}
         return this.UsersService.editMess(body)
     }
 
