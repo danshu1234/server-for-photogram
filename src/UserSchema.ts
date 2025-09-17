@@ -88,6 +88,9 @@ export class User {
   @Prop({ required: false })
   socket: string;
 
+  @Prop({ required: false })
+  peerId: string;
+
   @Prop({ required: true })
   usersBan: string[];
 

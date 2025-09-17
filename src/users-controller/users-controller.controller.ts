@@ -397,4 +397,19 @@ export class UsersControllerController {
         return 'OK'
     }
 
+    @Patch('add/peer')
+    @UseGuards(JwtAuthGuard)
+    addPeer(@Request() req, @Body() data: {peerId: string}) {
+        const body = {email: req.user.email, peerId: data.peerId}
+        this.UsersService.addPeer(body)
+    }
+
+    @Post('data/call')
+    @UseGuards(JwtAuthGuard)
+    dataForCall(@Request() req, @Body() data: {trueParamEmail: string}) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.dataForCall(body)
+    }
+
+
 }

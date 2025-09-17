@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Body, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from 'src/UserSchema';
@@ -370,6 +370,8 @@ export class UsersServiceService {
                         }))
                         return resultMessages
                     }
+                } else {
+                    return []
                 }
             }
         }
@@ -846,6 +848,7 @@ export class UsersServiceService {
                             permMess: 'Все',
                             birthday: '',
                             savePosts: [],
+                            peerId: '',
                         })
                         await myUser.save()
                         await this.codeModel.findOneAndDelete({email: body.login})
@@ -888,6 +891,16 @@ export class UsersServiceService {
                 return 'ERR'
             }
         }
+    }
+
+    async addPeer(body: {email: string, peerId: string}) {
+        await this.userModel.findOneAndUpdate({email: body.email}, {peerId: body.peerId}, {new: true})
+    }
+
+    async dataForCall(body: {email: string, trueParamEmail: string}) {
+        const findMe = await this.userModel.findOne({email: body.email})
+        const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
+        return {name: findMe?.name, friendPeer: findFriend?.peerId}
     }
 
 }

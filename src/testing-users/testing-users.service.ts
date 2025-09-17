@@ -9,6 +9,7 @@ import * as argon2 from 'argon2';
 import { testingDb } from './testingDb';
 import { ChangePassDto } from './ChangePassDto';
 import { HttpException } from '@nestjs/common';
+import { SocketGateway } from 'src/socket-getaway';
 
 @Injectable()
 export class TestingUsersService {
@@ -20,6 +21,5 @@ export class TestingUsersService {
         private readonly userModel: Model<TestingUserDocument>,
 
     ) {}
-
 
 }
