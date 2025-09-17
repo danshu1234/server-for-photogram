@@ -411,5 +411,4 @@ export class UsersControllerController {
         return this.UsersService.dataForCall(body)
     }
 
-
 }
