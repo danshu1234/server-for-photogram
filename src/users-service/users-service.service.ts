@@ -580,10 +580,10 @@ export class UsersServiceService {
         const newChats = findMe?.messages.map(el => {
             if (el.user === body.trueParamEmail) {
                 const newMess = el.messages.map(item => {
-                    if (item.id === body.editMess) {
+                    if (item.id === body.editMess && process.env.ENCRYPTION_KEY) {
                         return {
                             ...item,
-                            text: body.inputMess,
+                            text: CryptoJS.AES.encrypt(body.inputMess, process.env.ENCRYPTION_KEY).toString(),
                             edit: true,
                         }
                     } else {
@@ -594,16 +594,18 @@ export class UsersServiceService {
                     ...el,
                     messages: newMess,
                 }
+            } else {
+                return el
             }
         })
 
         const newFriendChats = findFriend?.messages.map(el => {
             if (el.user === findMe?.email) {
                 const newMess = el.messages.map(item => {
-                    if (item.id === body.editMess) {
+                    if (item.id === body.editMess && process.env.ENCRYPTION_KEY) {
                         return {
                             ...item,
-                            text: body.inputMess,
+                            text: CryptoJS.AES.encrypt(body.inputMess, process.env.ENCRYPTION_KEY).toString(),
                             edit: true,
                         }
                     } else {
@@ -624,7 +626,15 @@ export class UsersServiceService {
             const findNewMe = await this.userModel.findOne({email: body.email})
             if (findNewMe) {
                 if (findFriend.socket) {
-                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: findNewMe.messages.find(el => el.user === body.trueParamEmail)?.messages}})
+                    const resultMessages = findNewMe.messages.find(el => el.user === body.trueParamEmail)?.messages.map(el => {
+                        if (process.env.ENCRYPTION_KEY) {
+                            return {
+                                ...el,
+                                text: CryptoJS.AES.decrypt(el.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                            }
+                        }
+                    })
+                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: resultMessages}})
                 }
             }
         }
