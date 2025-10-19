@@ -1,8 +1,9 @@
-import { Body, Injectable } from '@nestjs/common';
+import { BadRequestException, Body, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from 'src/UserSchema';
 import { Code, CodeDocument } from 'src/CodeSchema';
+import { TestingUser, TestingUserDocument } from 'src/TestingUserSchema';
 import { EnterCode, EnterCodeDocument } from 'src/EnterCodeSchema';
 import { SocketGateway } from 'src/socket-getaway';
 import EmailAndTrueParamEmail from 'src/emailInterface';
@@ -14,24 +15,37 @@ import * as argon2 from 'argon2';
 import * as sharp from 'sharp';
 import { JwtService } from '@nestjs/jwt';
 import * as CryptoJS from 'crypto-js';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class UsersServiceService {
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService) {}
-    async enter(body: {login: string, password: string}) {
-        const err = 'ERR'
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>,) {}
+    async enter(body: {login: string, password: string}, response: any) {
         const findUser = await this.userModel.findOne({email: body.login})
         if (findUser) {
             const checkPass = await argon2.verify(findUser.password, body.password)
             if (checkPass === true) {
+                const refreshToken = uuidv4()
+                const resultRefreshToken = await argon2.hash(refreshToken)
                 const token = this.jwtService.sign({email: findUser.email})
-                return token
+                const date = new Date()
+                const time = date.getTime()
+                const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
+                await newRefreshToken.save()
+                response.cookie('accessToken', token, {
+                    httpOnly: true,
+                    sameSite: 'strict',
+                    maxAge: 60 * 60 * 1000, 
+                });
+                return {
+                    refreshToken: refreshToken,
+                }
             } else {
-                return err
+                throw new BadRequestException()
             }
         } else {
-            return err
+            throw new BadRequestException()
         }
     }
 
@@ -133,6 +147,8 @@ export class UsersServiceService {
             resultNotifs = [...currentNotifs, {type: 'succes', user: body.resultEmail}]
         } else if (body.type === 'err') {
             resultNotifs = [...currentNotifs, {type: 'err', user: body.resultEmail}]
+        } else if (body.type === 'sub') {
+            resultNotifs = [...currentNotifs, {type: 'sub', user: body.resultEmail}]
         }
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
     }
@@ -162,7 +178,7 @@ export class UsersServiceService {
 
     async updateVisits(body: {email: string, targetEmail: string}) {
         const findUser = await this.userModel.findOne({email: body.targetEmail})
-        const findMe = await this.userModel.findOne({code: body.email})
+        const findMe = await this.userModel.findOne({email: body.email})
         if (findUser && findMe) {
             const newVisits = [...findUser.visits, findMe.email]
             await this.userModel.findOneAndUpdate({email: body.targetEmail}, {visits: newVisits}, {new: true})
@@ -834,7 +850,7 @@ export class UsersServiceService {
         }
     }
 
-    async regUser(body: CreateUser) {
+    async regUser(body: CreateUser, response: any) {
         const findThisLogin = await this.userModel.findOne({email: body.login})
         if (!findThisLogin) {
             if (body.firstPass === body.secondPass) {
@@ -863,12 +879,29 @@ export class UsersServiceService {
                         await myUser.save()
                         await this.codeModel.findOneAndDelete({email: body.login})
                         const token = this.jwtService.sign({email: body.login})
-                        return token
+                        const refreshToken = uuidv4()
+                        const resultRefreshToken = await argon2.hash(refreshToken)
+                        const date = new Date()
+                        const time = date.getTime()
+                        const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
+                        await newRefreshToken.save()
+                        response.cookie('accessToken', token, {
+                            httpOnly: true,
+                            sameSite: 'strict',
+                            maxAge: 60 * 60 * 1000, 
+                        });
+                        return {
+                            refreshToken: refreshToken,
+                        }
                     } else {
-                        return 'ERR'
+                        throw new BadRequestException('Неверный код')   
                     }
                 }
+            } else {
+                throw new BadRequestException('Пароли должны совпадать')
             }
+        } else {
+            throw new BadRequestException('Вы не можете создать аккаунт с таким логином')
         }
     }
 
@@ -894,11 +927,20 @@ export class UsersServiceService {
                 const findThisUser = await this.userModel.findOne({email: body.email})
                 await this.enterCodeModel.findOneAndDelete({email: body.email})
                 if (findThisUser) {
+                    const refreshToken = uuidv4()
+                    const resultRefreshToken = await argon2.hash(refreshToken)
+                    const date = new Date()
+                    const time = date.getTime()
+                    const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.email, timeStamp: time})
+                    await newRefreshToken.save()
                     const token = this.jwtService.sign({email: findThisUser.email})
-                    return token
+                    return {
+                        token: token,
+                        refreshToken: refreshToken,
+                    }
                 }
             } else {
-                return 'ERR'
+                throw new BadRequestException()
             }
         }
     }
@@ -911,6 +953,45 @@ export class UsersServiceService {
         const findMe = await this.userModel.findOne({email: body.email})
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         return {name: findMe?.name, friendPeer: findFriend?.peerId}
+    }
+
+    async getNewToken(body: {refreshToken: string}, response: any) {
+        const allRefreshTokens = await this.refreshTokensModel.find().lean()
+        let resultRefreshToken: any = null
+        for (let item of allRefreshTokens) {
+            const checkToken = await argon2.verify(item.token, body.refreshToken)
+            if (checkToken) {
+                resultRefreshToken = item
+                break
+            }
+        }
+        if (resultRefreshToken) {
+            const date = new Date()
+            const nowTime = date.getTime()
+            if (nowTime - resultRefreshToken.timeStamp < 86400000) {
+                const resultAccessToken = this.jwtService.sign({email: resultRefreshToken.email})
+                const refreshToken = uuidv4()
+                const resultToken = await argon2.hash(refreshToken)
+                await this.refreshTokensModel.findOneAndUpdate({token: resultRefreshToken.token}, {token: resultToken}, {new: true})
+                response.cookie('accessToken', resultAccessToken, {
+                    httpOnly: true,
+                    sameSite: 'strict',
+                    maxAge: 60 * 60 * 1000, 
+                });
+                return {
+                    refreshToken: refreshToken,
+                }
+            } else {
+                await this.refreshTokensModel.findOneAndDelete({token: resultRefreshToken.token})
+                throw new BadRequestException('time')
+            }
+        } else {
+            throw new BadRequestException('undefined')
+        }
+    }
+
+    async deleteAvatar(email: string) {
+        await this.userModel.findOneAndUpdate({email: email}, {avatar: ''}, {new: true})
     }
 
 }

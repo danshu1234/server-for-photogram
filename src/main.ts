@@ -4,10 +4,12 @@ import * as bodyParser from 'body-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressPeerServer } from 'peer';
 import * as express from 'express';
+import cookieParser = require('cookie-parser');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe());
+  app.use(cookieParser());
   
   app.use(bodyParser.json({ limit: '10mb' })); 
   app.enableCors({

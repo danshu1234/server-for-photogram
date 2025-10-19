@@ -9,9 +9,11 @@ import { SocketModule } from './getaway.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config'; 
 import { PassportModule } from '@nestjs/passport';
+import { GoogleStrategy } from './google.strategy';
+import { TestingUser, TestingUserSchema } from './TestingUserSchema';
 
 @Module({
-    providers: [UsersServiceService],
+    providers: [UsersServiceService, GoogleStrategy],
     controllers: [UsersControllerController],
     imports: [
         ConfigModule.forRoot({
@@ -21,7 +23,8 @@ import { PassportModule } from '@nestjs/passport';
         MongooseModule.forFeature([
             {name: User.name, schema: UserSchema}, 
             {name: Code.name, schema: CodeSchema}, 
-            {name: EnterCode.name, schema: EnterCodeSchema}
+            {name: EnterCode.name, schema: EnterCodeSchema},
+            {name: TestingUser.name, schema: TestingUserSchema},
         ]), 
         SocketModule,
         PassportModule,
@@ -30,7 +33,7 @@ import { PassportModule } from '@nestjs/passport';
             useFactory: async (configService: ConfigService) => ({
                 secret: configService.get<string>('JWT_SECRET'),
                 signOptions: { 
-                    expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1h') 
+                    expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1m') 
                 },
             }),
             inject: [ConfigService],

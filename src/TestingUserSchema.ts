@@ -3,20 +3,18 @@ import { Document } from 'mongoose';
 
 export type TestingUserDocument = TestingUser & Document;
 
+@Schema()
 
 @Schema()
 export class TestingUser {
     @Prop({ required: true })
-    login: string;
+    token: string;
 
-    @Prop()
-    password: string;
+    @Prop({ required: true })
+    email: string;
 
-    @Prop()
-    name: string;
-
-    @Prop()
-    age: number;
+    @Prop({ required: true })
+    timeStamp: number;
 }
 
 

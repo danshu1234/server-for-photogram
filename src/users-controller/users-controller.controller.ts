@@ -1,4 +1,4 @@
-import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request, Res } from '@nestjs/common';
 import { UsersServiceService } from 'src/users-service/users-service.service';
 import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
@@ -8,6 +8,9 @@ import { NewUserDto } from 'src/NewUserDto';
 import { CreateUser } from 'src/CreateUser';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from 'jwt-auth.guard';
+import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
+import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 
 @Controller('users-controller')
 export class UsersControllerController {
@@ -16,8 +19,8 @@ export class UsersControllerController {
 
 
     @Post('enter')
-    enter(@Body() body: {login: string, password: string}) {
-        return this.UsersService.enter(body)
+    enter(@Body() body: {login: string, password: string}, @Res({ passthrough: true }) response: Response) {
+        return this.UsersService.enter(body, response)
     }
 
     @Get('check/find/user/:email')
@@ -26,27 +29,27 @@ export class UsersControllerController {
     }
 
     @Get('all/subs/and/country')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getAllSubs(@Request() req) {
         return this.UsersService.getSubs(req.user.email)
     }
 
     @Patch('unsub')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     unSubUser(@Body() data: {targetEmail: string}, @Request() req) {
         const body = {targetEmail: data.targetEmail, resultEmail: req.user.email}
         this.UsersService.unSub(body)
     }
 
     @Patch('sub')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     subUser(@Body() data: {targetEmail: string}, @Request() req) {
         const body = {targetEmail: data.targetEmail, resultEmail: req.user.email}
         this.UsersService.sub(body)
     }
 
     @Patch('add/socket')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     addSocket(@Body() data: {socketId: string}, @Request() req) {
         const body = {socketId: data.socketId, email: req.user.email}
         this.UsersService.addSocket(body)
@@ -58,13 +61,13 @@ export class UsersControllerController {
     }
 
     @Get('get/notifs')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getNotifs(@Request() req) {
         return this.UsersService.getNotifs(req.user.email)
     }
 
     @Patch('new/notif')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     newNotif(@Body() data: {userEmail: string, photoId?: string, type: string}, @Request() req) {
         let body: any = null
         if (data.photoId) {
@@ -76,7 +79,7 @@ export class UsersControllerController {
     }
 
     @Patch('clear/notifs')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     clearNotifs(@Request() req) {
         return this.UsersService.clearNotifs(req.user.email)
     }
@@ -92,7 +95,9 @@ export class UsersControllerController {
     }
 
     @Patch('update/visits')
-    updateVisits(@Body() body: {email: string, targetEmail: string}) {
+    @UseGuards(CookieJwtGuard)
+    updateVisits(@Body() data: {email: string, targetEmail: string}, @Request() req) {
+        const body = {email: req.user.email, targetEmail: data.targetEmail}
         return this.UsersService.updateVisits(body)
     }
 
@@ -102,7 +107,7 @@ export class UsersControllerController {
     }
 
     @Patch('new/report')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     newReport(@Body() data: {targetEmail: string}, @Request() req) {
         const body = {targetEmail: data.targetEmail, email: req.user.email}
         this.UsersService.newReport(body)
@@ -124,19 +129,19 @@ export class UsersControllerController {
     }
 
     @Get('get/email')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getEmail(@Request() req) {
         return req.user.email
     }
 
     @Get('get/avatar')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getAva(@Request() req) {
         return this.UsersService.getAva(req.user.email)
     }
 
     @Patch('new/avatar')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     newAvatar(@Body() data: {newAva: string}, @Request() req) {
         const resultEmail: string = req.user.email
         const body = {targetEmail: resultEmail, newAva: data.newAva}
@@ -149,19 +154,19 @@ export class UsersControllerController {
     }
 
     @Get('check/open')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     checkOpen(@Request() req) {
         return this.UsersService.checkOpen(req.user.email)
     }
 
     @Patch('close/acc')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     closeAcc(@Request() req) {
         return this.UsersService.closeAcc(req.user.email)
     }
 
     @Patch('open/acc')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     openAcc(@Request() req) {
         return this.UsersService.openAcc(req.user.email)
     }
@@ -172,14 +177,14 @@ export class UsersControllerController {
     }
 
     @Patch('new/perm/user')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     newPermUser(@Body() data: {newUserEmail: string}, @Request() req) {
         const body = {newUserEmail: data.newUserEmail, email: req.user.email}
         this.UsersService.newPermUser(body)
     }
 
     @Patch('delete/perm')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     deletePerm(@Body() data: {user: string}, @Request() req) {
         const body = {user: data.user, email: req.user.email}
         return this.UsersService.deletePerm(body)
@@ -196,20 +201,20 @@ export class UsersControllerController {
     }
 
     @Get('get/chats')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getChats(@Request() req) {
         return this.UsersService.getChats(req.user.email)
     }
 
     @Post('get/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getMess(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         return this.UsersService.getMess(body)
     }
 
     @Patch('new/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
     newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
@@ -217,7 +222,7 @@ export class UsersControllerController {
     }
 
     @Patch('new/chat')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
     newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
@@ -225,14 +230,14 @@ export class UsersControllerController {
     }
 
     @Patch('zero/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     zeroMess(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.zeroMess(body)
     }
 
     @Post('typing')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     typing(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.typingUser(body)
@@ -244,19 +249,20 @@ export class UsersControllerController {
     }
 
     @Get('get/my/ban/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getMyBanMess(@Request() req) {
         return this.UsersService.getBanMess(req.user.email)
     }
 
     @Patch('ban/user')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     banUser(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.banUser(body)
     }
 
     @Patch('unban/user')
+    @UseGuards(CookieJwtGuard)
     unbanUser(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.unbanUser(body)
@@ -273,48 +279,48 @@ export class UsersControllerController {
     }
 
     @Patch('edit/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email}
         return this.UsersService.editMess(body)
     }
 
     @Get('get/perm/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getPerm(@Request() req) {
         return this.UsersService.getPerm(req.user.email)
     }
 
     @Patch('new/perm/mess')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     newMessPerm(@Body() data: {changePerm: string}, @Request() req) {
         const body = {changePerm: data.changePerm, email: req.user.data}
         this.UsersService.newMessPerm(body)
     }
 
     @Post('get/perm/data')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getPermData(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         return this.UsersService.getPermData(body)
     }
 
     @Post('start/voice')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     startVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.startVoice(body)
     }
 
     @Post('stop/voice')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     stopVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
         this.UsersService.stopVoice(body)
     }
 
     @Patch('pin/chat')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     pinChat(@Body() data: {user: string, pin: boolean}, @Request() req) {
         const body = {user: data.user, pin: data.pin, email: req.user.email}
         return this.UsersService.pinChat(body)
@@ -356,7 +362,7 @@ export class UsersControllerController {
     }
 
     @Patch('change/notifs')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     changeNotifs(@Body() data: {notifs: boolean, user: string}, @Request() req) {
         const body = {notifs: data.notifs, user: data.user, trueEmail: req.user.email}
         this.UsersService.changeNofifs(body)
@@ -378,8 +384,8 @@ export class UsersControllerController {
     }
 
     @Post('reg/user')
-    regUser(@Body() body: CreateUser) {
-        return this.UsersService.regUser(body)
+    regUser(@Body() body: CreateUser, @Res({ passthrough: true }) response: Response) {
+        return this.UsersService.regUser(body, response)
     }
 
     @Post('send/enter/code/:email') 
@@ -393,23 +399,46 @@ export class UsersControllerController {
     }
 
     @Post('check/token')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     checkToken(@Request() req) {
         return 'OK'
     }
 
     @Patch('add/peer')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     addPeer(@Request() req, @Body() data: {peerId: string}) {
         const body = {email: req.user.email, peerId: data.peerId}
         this.UsersService.addPeer(body)
     }
 
     @Post('data/call')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     dataForCall(@Request() req, @Body() data: {trueParamEmail: string}) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.UsersService.dataForCall(body)
+    }
+
+    @Get('google')
+    @UseGuards(AuthGuard('google'))
+    async googleAuth() {}
+
+    @Get('google/auth')
+    @UseGuards(AuthGuard('google'))
+        async googleAuthRedirect(@Request() req, @Res() res: Response) {
+        const userEmail = req.user.email;
+        res.redirect(`http://localhost:3000/auth/success?email=${encodeURIComponent(userEmail)}`);
+    }
+
+    @Patch('get/new/token')
+    getNewToken(@Body() body: {refreshToken: string}, @Res({ passthrough: true }) response: Response) {
+        return this.UsersService.getNewToken(body, response)
+    }
+
+    @Patch('delete/avatar')
+    @UseGuards(CookieJwtGuard)
+    deleteAvatar(@Request() req) {
+        const userEmail = req.user.email
+        this.UsersService.deleteAvatar(userEmail)
     }
 
 }

@@ -3,6 +3,7 @@ import { PhotosService } from './photos.service';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { JwtAuthGuard } from 'jwt-auth.guard';
+import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 
 @Controller('photos')
 export class PhotosController {
@@ -10,8 +11,10 @@ export class PhotosController {
     constructor(private readonly PhotosService: PhotosService){}
 
     @Post('create')
+    @UseGuards(CookieJwtGuard)
     @UseInterceptors(FileInterceptor('photo'))
-    createNewPhoto(@UploadedFile() file: Express.Multer.File, @Body() body: {id: string, date: string, email: string}) {
+    createNewPhoto(@UploadedFile() file: Express.Multer.File, @Body() data: {id: string, date: string}, @Request() req) {
+        const body = {id: data.id, date: data.date, email: req.user.email}
         const photo = {
             file: file,
             data: body,
@@ -20,21 +23,21 @@ export class PhotosController {
     }
 
     @Post('get/user/photos')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     getUserPhoto(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.PhotosService.getUserPhotoServ(body)
     }
 
     @Patch('like/this/photo')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     likeThisPhoto(@Body() data: {id: string}, @Request() req) {
         const body = {email: req.user.email, id: data.id}
         this.PhotosService.likePhoto(body)
     }
 
     @Patch('unlike/photo')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(CookieJwtGuard)
     unlikeThisPhoto(@Body() data: {id: string}, @Request() req) {
         const body = {email: req.user.email, id: data.id}
         this.PhotosService.unlikePhoto(body)
@@ -63,7 +66,9 @@ export class PhotosController {
     }
 
     @Patch('new/comment')
-    addNewComment(@Body() body: {email: string, targetId: string, commentInput: string}) {
+    @UseGuards(CookieJwtGuard)
+    addNewComment(@Body() data: {targetId: string, commentInput: string}, @Request() req) {
+        const body = {targetId: data.targetId, commentInput: data.commentInput, email: req.user.email}
         return this.PhotosService.addNewComment(body)
     }
 
@@ -73,17 +78,23 @@ export class PhotosController {
     }
 
     @Patch('perm/comments')
-    permComments(@Body() body: {photoId: string, perm: boolean, email: string}) {
+    @UseGuards(CookieJwtGuard)
+    permComments(@Body() data: {photoId: string, perm: boolean}, @Request() req) {
+        const body = {photoId: data.photoId, perm: data.perm, email: req.user.email}
         return this.PhotosService.permComments(body)
     }
     
     @Delete('delete/photo')
-    deletePhoto(@Body() body: {photoId: string, email: string}) {
+    @UseGuards(CookieJwtGuard)
+    deletePhoto(@Body() data: {photoId: string}, @Request() req) {
+        const body = {photoId: data.photoId, email: req.user.email}
         this.PhotosService.deletePhoto(body)
     }
 
     @Patch('delete/comment')
-    deleteComment(@Body() body: {email: string, photoId: string, comment: string}) {
+    @UseGuards(CookieJwtGuard)
+    deleteComment(@Body() data: {photoId: string, comment: string}, @Request() req) {
+        const body = {photoId: data.photoId, comment: data.comment, email: req.user.email}
         return this.PhotosService.deleteComment(body)
     }
 

@@ -18,8 +18,7 @@ export class PhotosService {
     constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, private jwtService: JwtService) {}
 
     async createPhoto(photo: {file: Express.Multer.File, data: {id: string, date: string, email: string}}) {
-        const userEmail = this.jwtService.verify(photo.data.email)
-        let resultEmail: string = userEmail.email
+        let resultEmail: string = photo.data.email
 
         const resultBuffer = await sharp(photo.file.buffer)
         .toBuffer()
@@ -102,8 +101,10 @@ export class PhotosService {
     async likePhoto(body: {email: string, id: string}) {
         const findThisPhoto = await this.photoModel.findOne({id: body.id})
         const prevLikes = findThisPhoto?.likes || []
+        if (!findThisPhoto?.likes.includes(body.email)) {
             const newLikes = [...prevLikes, body.email]
             await this.photoModel.findOneAndUpdate({id: body.id}, {likes: newLikes}, {new: true})
+        }
     }
 
     async unlikePhoto(body: {email: string, id: string}) {
@@ -166,7 +167,7 @@ export class PhotosService {
     }
 
     async addNewComment(body: {email: string, targetId: string, commentInput: string}) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.targetId})
         if (findPhoto?.comments && findUser) {
             const prevComments = findPhoto.comments
@@ -193,7 +194,7 @@ export class PhotosService {
     }
 
     async deletePhoto(body: {photoId: string, email: string}) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.photoId})
         if (findUser && findPhoto) {
             if (findUser.email === findPhoto.email) {
@@ -203,7 +204,7 @@ export class PhotosService {
     }
 
     async deleteComment(body: {email: string, photoId: string, comment: string}) {
-        const findUser = await this.userModel.findOne({code: body.email})
+        const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.photoId})
         if (findUser && findPhoto) {
             const newComments = findPhoto.comments.map(el => {

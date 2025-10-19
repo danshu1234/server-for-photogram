@@ -10,6 +10,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailModule } from './mail.module';
 import { User } from './testing-users/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -34,6 +35,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       entities: [User],
       autoLoadEntities: true,
       synchronize: true,
+    }),
+    CacheModule.register({
+      ttl: 5 * 60 * 1000, 
+      max: 100, 
     }),
   ],
   controllers: [AppController],
