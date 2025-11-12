@@ -11,6 +11,7 @@ import { JwtAuthGuard } from 'jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { CookieJwtGuard } from 'src/cookie-jwt.guard';
+import { messIdAndTrueParamEmail } from 'src/messIdInter';
 
 @Controller('users-controller')
 export class UsersControllerController {
@@ -218,7 +219,7 @@ export class UsersControllerController {
     @UseInterceptors(FilesInterceptor('photo'))
     newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
-        this.UsersService.newMess(resultData)
+        return this.UsersService.newMess(resultData)
     }
 
     @Patch('new/chat')
@@ -226,7 +227,7 @@ export class UsersControllerController {
     @UseInterceptors(FilesInterceptor('photo'))
     newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
-        this.UsersService.newChat(resultData)
+        return this.UsersService.newChat(resultData)
     }
 
     @Patch('zero/mess')
@@ -269,7 +270,9 @@ export class UsersControllerController {
     }
 
     @Patch('delete/mess')
-    deleteMess(@Body() body: {email: string, trueParamEmail: string, index: number, messId: string}) {
+    @UseGuards(CookieJwtGuard)
+    deleteMess(@Body() data: {trueParamEmail: string, index: number, messId: string, readStatus: boolean}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, index: data.index, messId: data.messId, readStatus: data.readStatus}
         return this.UsersService.deleteMess(body)
     }
 
@@ -351,16 +354,6 @@ export class UsersControllerController {
         return this.UsersService.getMessCount(email)
     }
 
-    @Post('get/online/status')
-    getOnlineStatus(@Body() body: {trueEmail: string, trueParamEmail: string}) {
-        this.UsersService.getOnlineStatus(body)
-    }
-
-    @Post('give/online/status')
-    giveOnlineStatus(@Body() body: {userEmail: string}) {
-        this.UsersService.giveOnlineStatus(body)
-    }
-
     @Patch('change/notifs')
     @UseGuards(CookieJwtGuard)
     changeNotifs(@Body() data: {notifs: boolean, user: string}, @Request() req) {
@@ -425,8 +418,14 @@ export class UsersControllerController {
     @Get('google/auth')
     @UseGuards(AuthGuard('google'))
         async googleAuthRedirect(@Request() req, @Res() res: Response) {
-        const userEmail = req.user.email;
-        res.redirect(`http://localhost:3000/auth/success?email=${encodeURIComponent(userEmail)}`);
+        const token = req.user.token
+        const refreshToken = req.user.refreshToken
+        res.cookie('accessToken', token, {
+            httpOnly: true,
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 1000, 
+        });
+        res.redirect(`http://localhost:3000/auth/${refreshToken}`);
     }
 
     @Patch('get/new/token')
@@ -439,6 +438,101 @@ export class UsersControllerController {
     deleteAvatar(@Request() req) {
         const userEmail = req.user.email
         this.UsersService.deleteAvatar(userEmail)
+    }
+
+    @Get('exit/acc')
+    exitAcc(@Res() res: Response) {
+        const token = ''
+        res.cookie('accessToken', token, {
+            httpOnly: true,
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 1000, 
+        });
+        return res.status(200).send()
+    }
+
+    @Patch('delete/chat')
+    @UseGuards(CookieJwtGuard)
+    deleteChat(@Body() data: {friendEmail: string, friendDel: boolean}, @Request() req) {
+        const body = {email: req.user.email, friendEmail: data.friendEmail, friendDel: data.friendDel}
+        return this.UsersService.deleteChat(body)
+    }
+
+    @Get('get/bot/mess')
+    @UseGuards(CookieJwtGuard)
+    getBotMess(@Request() req) {
+        return this.UsersService.getBotMess(req.user.email)
+    }
+
+    @Get('check/user/:email')
+    checkUser(@Param('email') email: string) {
+        return this.UsersService.checkUser(email)
+    }
+
+    @Get('user/close')
+    @UseGuards(CookieJwtGuard)
+    userClose(@Request() req) {
+        this.UsersService.closeUser(req.user.email)
+    }
+
+    @Patch('online/status')
+    @UseGuards(CookieJwtGuard)
+    onlineStatus(@Request() req) {
+        this.UsersService.onlineStatus(req.user.email)
+    }
+
+    @Get('get/status/online/:trueParamEmail')
+    getStatusOnline(@Param('trueParamEmail') trueParamEmail: string) {
+        return this.UsersService.getStatusOnline(trueParamEmail)
+    }
+
+    @Post('video')
+    @UseGuards(CookieJwtGuard)
+    getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string}, @Request() req) {
+        const body = {...data, email: req.user.email}
+        return this.UsersService.getVideoMess(body)
+    }
+    
+    @Post('get/friend/mess/count')
+    @UseGuards(CookieJwtGuard)
+    getFriendMessCount(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {...data, email: req.user.email}
+        return this.UsersService.getFriendMessCount(body)
+    }
+
+    @Post('read/mess')
+    readMess(@Body() body: {targetEmail: string}) {
+        this.UsersService.readMess(body)
+    }
+
+    @Post('open/chat')
+    @UseGuards(CookieJwtGuard)
+    openChat(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        this.UsersService.openChat(body)
+    }
+
+    @Post('video/mess')
+    @UseGuards(CookieJwtGuard)
+    videoMess(@Body() data: messIdAndTrueParamEmail, @Request() req) {
+        const body = {...data, email: req.user.email}
+        return this.UsersService.videoMess(body)
+    }
+
+    @Get('get/file')
+    @UseGuards(CookieJwtGuard)
+    async getFile(@Body() data: messIdAndTrueParamEmail, @Request() req, @Res() res) {
+        const body = {...data, email: req.user.email}
+        const file = await this.UsersService.getFile(body)
+        res.set({
+            'Content-Type': file?.type,
+            'Content-Length': file?.file.length,
+            'Content-Disposition': 'attachment; filename="file"',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
+        res.send(file?.file)
     }
 
 }

@@ -16,14 +16,36 @@ import * as sharp from 'sharp';
 import { JwtService } from '@nestjs/jwt';
 import * as CryptoJS from 'crypto-js';
 import { v4 as uuidv4 } from 'uuid';
+import { fileTypeFromBuffer } from 'file-type';
+import { emailAndMessIdAndTrueParamEmail } from 'src/messIdInter';
 
 @Injectable()
 export class UsersServiceService {
 
     constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>,) {}
+    
+    checkSize(files: Express.Multer.File[]) {
+        if (files.length !== 0) {
+                const sizeFiles = files.map(el => {
+                const buffer = Buffer.from(el.buffer)
+                const sizeInMB = Number((buffer.length / (1024 * 1024)).toFixed(2))
+                return sizeInMB
+            })
+            const resultSize = sizeFiles.reduce((acuum, el) => acuum + el)
+            console.log(`Size: ${resultSize}`)
+            if (resultSize < 7) {
+                return true
+            } else {
+                return false
+            }
+        } else {
+            return true
+        }
+    }
+    
     async enter(body: {login: string, password: string}, response: any) {
         const findUser = await this.userModel.findOne({email: body.login})
-        if (findUser) {
+        if (findUser && findUser.password) {
             const checkPass = await argon2.verify(findUser.password, body.password)
             if (checkPass === true) {
                 const refreshToken = uuidv4()
@@ -141,15 +163,9 @@ export class UsersServiceService {
         let resultNotifs: any = []
         if (body.type === 'photo') {
             resultNotifs = [...currentNotifs, {type: 'photo', user: body.resultEmail, photoId: body.photoId}]
-        } else if (body.type === 'perm') {
-            resultNotifs = [...currentNotifs, {type: 'perm', user: body.resultEmail}]
-        } else if (body.type === 'succes') {
-            resultNotifs = [...currentNotifs, {type: 'succes', user: body.resultEmail}]
-        } else if (body.type === 'err') {
-            resultNotifs = [...currentNotifs, {type: 'err', user: body.resultEmail}]
-        } else if (body.type === 'sub') {
-            resultNotifs = [...currentNotifs, {type: 'sub', user: body.resultEmail}]
-        }
+        } else {
+            resultNotifs = [...currentNotifs, {type: body.type, user: body.resultEmail}]
+        } 
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
     }
 
@@ -343,16 +359,16 @@ export class UsersServiceService {
                 let findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
                 if (findChat) {
                     const resultMessages = findChat?.messages.map(el => {
-                    let resultText: string = ''
-                    if (process.env.ENCRYPTION_KEY && el.text !== '') {
-                        resultText = CryptoJS.AES.decrypt(el.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
-                    } else {
-                        resultText = ''
-                    }
-                    return {
-                        ...el,
-                        text: resultText,
-                    }
+                        let resultText: string = ''
+                        if (process.env.ENCRYPTION_KEY && el.text !== '') {
+                            resultText = CryptoJS.AES.decrypt(el.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                        } else {
+                            resultText = ''
+                        }
+                        return {
+                            ...el,
+                            text: resultText,
+                        }
                     })
                     findChat = {
                         ...findChat,
@@ -363,22 +379,26 @@ export class UsersServiceService {
                     } else {
                         const resultMessages = await Promise.all(findChat.messages.map(async message => {
                             if (message.photos.length !== 0) {
-                                const resultBuffers = await Promise.all(message.photos.map(async photo => {
-                                    const buffer = Buffer.from(photo.buffer);
-                                    const resultBuffer = await sharp(buffer)
-                                    .resize(350, 250)
-                                    .jpeg({quality: 90})
-                                    .toBuffer()
-                                    return resultBuffer
-                                }))
-                                let resultText: string = ''
-                                if (process.env.ENCRYPTION_KEY) {
-                                    resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
-                                }
-                                return {
-                                    ...message,
-                                    text: resultText,
-                                    photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
+                                if (message.typeMess === 'text') {
+                                    const resultBuffers = await Promise.all(message.photos.map(async photo => {
+                                        const buffer = Buffer.from(photo.buffer);
+                                        const resultBuffer = await sharp(buffer)
+                                        .resize(350, 250)
+                                        .jpeg({quality: 90})
+                                        .toBuffer()
+                                        return resultBuffer
+                                    }))
+                                    let resultText: string = ''
+                                    if (process.env.ENCRYPTION_KEY) {
+                                        resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                                    }
+                                    return {
+                                        ...message,
+                                        text: resultText,
+                                        photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
+                                    }
+                                } else {
+                                    return {...message, photos: []}
                                 }
                             } else {
                                 return message
@@ -394,76 +414,100 @@ export class UsersServiceService {
     }
 
     async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
-        const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
-        const findMe = await this.userModel.findOne({email: resultData.email})
-        let resultEncryptedText: string = ''
-        if (process.env.ENCRYPTION_KEY) {
-            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
-        }
-        if (findFriend?.email !== findMe?.email) {
-            const newMessages = findFriend?.messages.map(el => {
-            if (el.user !== findMe?.email) {
-                return el
+        let permSize = this.checkSize(resultData.files)
+        if (permSize) {
+            const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
+            const findMe = await this.userModel.findOne({email: resultData.email})
+            let resultEncryptedText: string = ''
+            if (process.env.ENCRYPTION_KEY) {
+                resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
+            }
+            const findThisChat = findFriend?.messages.find(el => el.user === resultData.email)
+            if (findThisChat) {
+                const newMessages = findFriend?.messages.map(el => {
+                    if (el.user !== findMe?.email) {
+                        return el
+                    } else {
+                        return {
+                            ...el,
+                            messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                            messCount: el.messCount + 1,
+                        }
+                    }
+                })
+                await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
             } else {
-                return {
-                    ...el,
-                    messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                    messCount: el.messCount + 1,
+                if (findFriend) {
+                    const date = new Date(); 
+                    const day = date.getDate().toString().padStart(2, '0'); 
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
+                    const year = date.getFullYear().toString().slice(-2);
+                    const formattedDate = `${day}.${month}.${year}`
+                    const id = date.getTime().toString()
+                    const newFriendChats = [...findFriend.messages, {user: resultData.email, messages: [{user: resultData.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
+                    await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendChats}, {new: true})
                 }
             }
-        })
-        await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
 
-        const newMessagesForMe = findMe?.messages.map(el => {
-            if (el.user !== resultData.trueParamEmail) {
-                return el
-            } else {
-                return {
-                    ...el,
-                    messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+            const newMessagesForMe = findMe?.messages.map(el => {
+                if (el.user !== resultData.trueParamEmail) {
+                    return el
+                } else {
+                    return {
+                        ...el,
+                        messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                    }
+                }
+            })
+
+            if (resultData.email !== resultData.trueParamEmail) {
+                await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessagesForMe}, {new: true})
+            }
+
+            let resultPhotos: any = []
+
+            if (resultData.files.length !== 0 && resultData.type === 'text') {
+                resultPhotos = await Promise.all(resultData.files.map(async photo => {
+                if (photo.mimetype === 'image/jpeg') {
+                    const resultBuffer = await sharp(photo.buffer)
+                    .resize(200, 200)
+                    .jpeg({quality: 70})
+                    .toBuffer()
+
+                    return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
+                } else if (photo.mimetype === 'image/png') {
+                    const resultBuffer = await sharp(photo.buffer)
+                    .resize(200, 200)
+                    .png({quality: 70})
+                    .toBuffer()
+
+                    return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
+                } else {
+                    return ''
+                }
+            }))
+            } 
+
+            if (findFriend?.socket !== '') {
+                if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
+                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
                 }
             }
-        })
-        await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessagesForMe}, {new: true})
-
-        let resultPhotos: any = []
-
-        if (resultData.files.length !== 0) {
-            resultPhotos = await Promise.all(resultData.files.map(async photo => {
-            if (photo.mimetype === 'image/jpeg') {
-                const resultBuffer = await sharp(photo.buffer)
-                .resize(200, 200)
-                .jpeg({quality: 70})
-                .toBuffer()
-
-                return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
-            } else if (photo.mimetype === 'image/png') {
-                const resultBuffer = await sharp(photo.buffer)
-                .resize(200, 200)
-                .png({quality: 70})
-                .toBuffer()
-
-                return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
-            }
-        }))
-        } 
-
-        if (findFriend?.socket !== '') {
-            if (findFriend?.socket !== undefined) {
-                this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
-            }
-        }
+            return 'OK'
+        } else {
+            return 'SIZE_ERR'
         }
     }
 
     async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
-        const findMe = await this.userModel.findOne({email: resultData.email})
-        const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
-        let resultEncryptedText: string = ''
-        if (process.env.ENCRYPTION_KEY) {
-            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
-        }
-        if (findMe?.email !== findFriend?.email) {
+        const permSize = this.checkSize(resultData.files)
+        if (permSize) {
+            const findMe = await this.userModel.findOne({email: resultData.email})
+            const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
+            let resultEncryptedText: string = ''
+            if (process.env.ENCRYPTION_KEY) {
+                resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
+            }
             const date = new Date(); 
             const day = date.getDate().toString().padStart(2, '0'); 
             const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
@@ -471,14 +515,31 @@ export class UsersServiceService {
             const formattedDate = `${day}.${month}.${year}`
             const id = date.getTime().toString()
             if (findMe?.messages) {
-                const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
+                const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
                 await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessages}, {new: true})
             }
-
             if (findFriend?.messages) {
-                const newMessages = [...findFriend.messages, {user: findMe?.email, messages: [{user: findMe?.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
-                await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
+                const findThisChat = findFriend.messages.find(el => el.user === resultData.email)
+                if (!findThisChat) {
+                    const newMessages = [...findFriend.messages, {user: findMe?.email, messages: [{user: findMe?.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
+                    await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
+                } else {
+                    const newMessages = {...findThisChat, messages: [...findThisChat.messages, {user: findMe?.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: findThisChat.messCount + 1}
+                    const resultFriendChats = findFriend.messages.map(el => {
+                        if (el.user === resultData.email) {
+                            return newMessages
+                        } else {
+                            return el
+                        }
+                    })
+                    if (resultData.email !== resultData.trueParamEmail) {
+                        await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: resultFriendChats}, {new: true})
+                    }
+                }
             }
+            return 'OK'
+        } else {
+            return 'SIZE_ERR'
         }
     }   
 
@@ -521,7 +582,7 @@ export class UsersServiceService {
     async banUser(body: EmailAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email})
         const prevBanUsers = findUser?.banMess
-        if (prevBanUsers) {
+        if (prevBanUsers && body.email !== body.trueParamEmail) {
             await this.userModel.findOneAndUpdate({email: body.email}, {banMess: [...prevBanUsers, body.trueParamEmail]}, {new: true})
         }
     }
@@ -535,7 +596,7 @@ export class UsersServiceService {
         }
     }
 
-    async deleteMess(body: {email: string, trueParamEmail: string, index: number, messId: string}) {
+    async deleteMess(body: {email: string, trueParamEmail: string, index: number, messId: string, readStatus: boolean}) {
         let newMess: any = []
         const findMe = await this.userModel.findOne({email: body.email})
         const newChats = findMe?.messages.map(el => {
@@ -556,10 +617,17 @@ export class UsersServiceService {
             if (el.user === body.email) {
                 const newMessages = el.messages.filter((el, index) => index !== body.index)
                 newMess = newMessages
-                return {
-                    ...el,
-                    messages: newMessages,
-                    messCount: el.messCount - 1,
+                if (body.readStatus === false) {
+                    return {
+                        ...el,
+                        messages: newMessages,
+                        messCount: el.messCount - 1,
+                    }
+                } else {
+                    return {
+                        ...el,
+                        messages: newMessages,
+                    }
                 }
             } else {
                 return el
@@ -567,7 +635,7 @@ export class UsersServiceService {
         })
         await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
         if (findFriend?.socket !== undefined) {
-            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: ''}})
+            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: '', readStatus: body.readStatus}})
         }
 
         if (newMess.length === 0) {
@@ -576,13 +644,7 @@ export class UsersServiceService {
             await this.userModel.findOneAndUpdate({email: body.email}, {messages: newMyChats}, {new: true})
             await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
         }
-        const resultMessages = newMess.map(el => {
-            return {
-                ...el,
-                photos: el.photos.map(element => `data:image/jpeg;base64,${element.toString('base64')}`)
-            }
-        })
-        return resultMessages
+        return 'OK'
     }
 
     async messCount(body: EmailAndTrueParamEmail) {
@@ -763,22 +825,6 @@ export class UsersServiceService {
         return findUser?.messages
     }
 
-    async getOnlineStatus(body: {trueEmail: string, trueParamEmail: string}) {
-        const findUser = await this.userModel.findOne({email: body.trueParamEmail})
-        const userSocket = findUser?.socket
-        if (userSocket !== undefined) {
-            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'onlineStatus', user: body.trueEmail, text: '', photos: [], id: '', ans: ''}})
-        }
-    }
-
-    async giveOnlineStatus(body: {userEmail: string}) {
-        const findUser = await this.userModel.findOne({email: body.userEmail})
-        const userSocket = findUser?.socket
-        if (userSocket !== undefined) {
-            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'giveOnlineStatus', user: body.userEmail, text: '', photos: [], id: '', ans: ''}})
-        }
-    }
-
     async changeNofifs(body: {notifs: boolean, trueEmail: string, user: string}) {
         const findUser = await this.userModel.findOne({email: body.trueEmail})
         const newChats = findUser?.messages.map(el => {
@@ -855,6 +901,8 @@ export class UsersServiceService {
         if (!findThisLogin) {
             if (body.firstPass === body.secondPass) {
                 const findCode = await this.codeModel.findOne({email: body.login})
+                console.log(body.code)
+                console.log(findCode)
                 if (findCode) {
                     if (body.code === findCode.code) {
                         const resultPass = await argon2.hash(body.firstPass)
@@ -875,6 +923,8 @@ export class UsersServiceService {
                             birthday: '',
                             savePosts: [],
                             peerId: '',
+                            botMess: [],
+                            onlineStatus: 'Online',
                         })
                         await myUser.save()
                         await this.codeModel.findOneAndDelete({email: body.login})
@@ -883,6 +933,7 @@ export class UsersServiceService {
                         const resultRefreshToken = await argon2.hash(refreshToken)
                         const date = new Date()
                         const time = date.getTime()
+                        await this.codeModel.findOneAndDelete({email: body.login, code: body.code})
                         const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
                         await newRefreshToken.save()
                         response.cookie('accessToken', token, {
@@ -992,6 +1043,158 @@ export class UsersServiceService {
 
     async deleteAvatar(email: string) {
         await this.userModel.findOneAndUpdate({email: email}, {avatar: ''}, {new: true})
+    }
+
+    async googleEnter(userEmail: string, name: string) {
+        const findUser = await this.userModel.findOne({email: userEmail})
+        if (!findUser) {
+            const myUser = new this.userModel({
+                email: userEmail,
+                name: name,    
+                subscribes: 0,
+                notifs: [],
+                socket: '',
+                visits: [],
+                reports: [],
+                avatar: '',
+                open: true,
+                permUsers: [],
+                messages: [],
+                permMess: 'Все',
+                birthday: '',
+                savePosts: [],
+                peerId: '',
+                botMess: [],
+                onlineStatus: 'Online',
+            })
+            await myUser.save()
+        }
+        const refreshToken = uuidv4()
+        const resultRefreshToken = await argon2.hash(refreshToken)
+        const date = new Date()
+        const time = date.getTime()
+        const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: userEmail, timeStamp: time})
+        await newRefreshToken.save()
+        const token = this.jwtService.sign({email: userEmail})
+        return {
+            token: token,
+            refreshToken: refreshToken,
+        }
+    }
+
+    async deleteChat(body: {email: string, friendEmail: string, friendDel: boolean}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const resultUserChats = findUser.messages.filter(el => el.user !== body.friendEmail)
+            await this.userModel.findOneAndUpdate({email: body.email}, {messages: resultUserChats}, {new: true})
+            if (body.friendDel === true) {
+                const findFriend = await this.userModel.findOne({email: body.friendEmail})
+                if (findFriend) {
+                    const resultFriendChats = findFriend.messages.filter(el => el.user !== body.email)
+                    await this.userModel.findOneAndUpdate({email: body.friendEmail}, {messages: resultFriendChats}, {new: true})
+                }
+            }
+        }
+        return 'OK'
+    }
+
+    async getBotMess(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        return findUser?.botMess
+    }
+
+    async checkUser(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            'OK'
+        } else {
+            return 'undefined'
+        }
+    }
+
+    async closeUser(email: string) {
+        const date = new Date(); 
+        const day = date.getDate()
+        const month = String(date.getMonth() + 1).padStart(2, '0'); 
+        const result = `${day}.${month}`;
+        await this.userModel.findOneAndUpdate({email: email}, {onlineStatus: result}, {new: true})
+    }
+
+    async onlineStatus(email: string) {
+        await this.userModel.findOneAndUpdate({email: email}, {onlineStatus: 'Online'}, {new: true})
+    }
+
+    async getStatusOnline(trueParamEmail: string) {
+        const findUser = await this.userModel.findOne({email: trueParamEmail})
+        return findUser?.onlineStatus
+    }
+
+    async getVideoMess(body: {email: string, videoMessId: string, trueParamEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        const userMess = findUser?.messages
+        if (userMess) {
+            const findThisChat = userMess.find(el => el.user === body.trueParamEmail)
+            const findMess = findThisChat?.messages.find(el => el.id === body.videoMessId)
+            const videoFile = findMess?.photos[0]
+            if (videoFile) {
+                const videoBuffer = Buffer.from(videoFile.buffer)
+                const resultVideo = `data:video/mp4;base64,${videoBuffer.toString('base64')}`
+                return resultVideo
+            }
+        }
+    }
+
+    async getFriendMessCount(body: {email: string, trueParamEmail: string}) {
+        const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findFriend) {
+            const resultChat = findFriend.messages.find(el => el.user === body.email)
+            return resultChat?.messCount
+        }
+    }
+
+    async readMess(body: {targetEmail: string}) {
+        const findFriend = await this.userModel.findOne({email: body.targetEmail})
+        if (findFriend) {
+            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'readMess', user: '', text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+        }
+    }
+
+    async openChat(body: {email: string, trueParamEmail: string}) {
+        const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findFriend) {
+            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'openChat', user: body.email, text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+        }
+    }
+
+    async videoMess(body: emailAndMessIdAndTrueParamEmail) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const userMess = findUser.messages
+            const findThisChat = userMess.find(el => el.user === body.trueParamEmail)
+            const findThisMess = findThisChat?.messages.find(el => el.id === body.messId)
+            if (findThisMess) {
+                const videoBuffer = Buffer.from(findThisMess.photos[0].buffer)
+                const resultVideo = `data:video/mp4;base64,${videoBuffer.toString('base64')}`
+                return resultVideo
+            }
+        }
+    }
+
+    async getFile(body: emailAndMessIdAndTrueParamEmail) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const userMess = findUser.messages
+            const findThisChat = userMess.find(el => el.user === body.trueParamEmail)
+            const findThisMess = findThisChat?.messages.find(el => el.id === body.messId)
+            if (findThisMess) {
+                const fileBuffer = Buffer.from(findThisMess.photos[0].buffer)
+                const fileType = await fileTypeFromBuffer(fileBuffer)
+                return {
+                    file: fileBuffer,
+                    type: fileType?.mime,
+                }
+            }
+        }
     }
 
 }

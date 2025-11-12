@@ -5,12 +5,12 @@ import { UsersModule } from './user.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PhotosModule } from './photo.module';
 import { SocketModule } from './getaway.module';
+import { OpenAIModule } from './openai.module';
 import { TestingUsersModule } from './testing-users/testing-users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailModule } from './mail.module';
 import { User } from './testing-users/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -28,6 +28,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     MailModule,
     PhotosModule,
     SocketModule,
+    OpenAIModule,
     TestingUsersModule,
     TypeOrmModule.forRoot({
       type: 'sqlite',
@@ -35,10 +36,6 @@ import { CacheModule } from '@nestjs/cache-manager';
       entities: [User],
       autoLoadEntities: true,
       synchronize: true,
-    }),
-    CacheModule.register({
-      ttl: 5 * 60 * 1000, 
-      max: 100, 
     }),
   ],
   controllers: [AppController],

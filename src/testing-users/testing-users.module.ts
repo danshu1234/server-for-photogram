@@ -4,13 +4,12 @@ import { User } from './user.entity';
 import { TestingUsersController } from './testing-users.controller';
 import { TestingUsersService } from './testing-users.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { TestingUserSchema, TestingUser } from 'src/TestingUserSchema';
+import { NewTestingUserSchema, NewTestingUser } from 'src/NewTestingUserShema';
 import { SocketModule } from '../getaway.module';
-import { CacheModule } from '@nestjs/cache-manager';
 import { UsersModule } from 'src/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), MongooseModule.forFeature([{name: TestingUser.name, schema: TestingUserSchema}]), SocketModule, UsersModule],
+  imports: [TypeOrmModule.forFeature([User]), MongooseModule.forFeature([{name: NewTestingUser.name, schema: NewTestingUserSchema}]), SocketModule, UsersModule],
   providers: [TestingUsersService],
   controllers: [TestingUsersController],
 })

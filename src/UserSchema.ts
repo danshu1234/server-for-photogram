@@ -5,6 +5,15 @@ import { AnimationFrameScheduler } from 'rxjs/internal/scheduler/AnimationFrameS
 export type UserDocument = User & Document;
 
 @Schema()
+export class BotMess {
+  @Prop({ required: true })
+  type: string;
+
+  @Prop({ required: false })
+  text: string;
+}
+
+@Schema()
 export class Notification {
   @Prop({ required: true })
   type: string;
@@ -73,7 +82,7 @@ export class User {
   @Prop({ required: true })
   email: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   password: string;
 
   @Prop({ required: true })
@@ -123,6 +132,12 @@ export class User {
 
   @Prop({ required: true })
   savePosts: string[];
+
+  @Prop({ required: true })
+  botMess: BotMess[];
+
+  @Prop({ required: true })
+  onlineStatus: string;
 }
 
 

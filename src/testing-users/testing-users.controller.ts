@@ -1,35 +1,27 @@
-import { Body, Controller, Get, Post, Patch, Delete, Param, UseGuards, Request, UseInterceptors, Req } from '@nestjs/common';
+import { Controller, Get, Post, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TestingUsersService } from './testing-users.service';
-import { JwtAuthGuard } from 'jwt-auth.guard';
-import { ChangePassDto } from './ChangePassDto';
-import { UserDto } from './user.dto';
+import { Response } from 'express';
 
 @Controller('testing-users')
 export class TestingUsersController {
 
     constructor(private readonly TestingUsersService: TestingUsersService) {}
-    
-    @Post('enter')
-    enterUser(@Body() body: {login: string, pass: string}) {
-        return this.TestingUsersService.enterUser(body)
-    }
-    
-    @Get('get/name')
-    @UseGuards(JwtAuthGuard)
-    getName(@Request() req) {
-        return this.TestingUsersService.getName(req.user.email)
+
+    @Post('save/file')
+    @UseInterceptors(FileInterceptor('file'))
+    saveFile(@UploadedFile() file: Express.Multer.File) {
+        return this.TestingUsersService.saveFile(file)
     }
 
-    @Patch('get/access/token')
-    getAccessToken(@Body() body: {refreshToken: string}) {
-        return this.TestingUsersService.getAccessToken(body)
+    @Get('file')
+    async getFile(@Res() res: Response) {
+        const archive = await this.TestingUsersService.getFile()
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="file"',
+        });
+        archive.pipe(res)
     }
 
-    @Delete('exit/from/all')
-    @UseGuards(JwtAuthGuard)
-    exitFromAll(@Request() req) {
-        this.TestingUsersService.exitFromAll(req.user.email)
-    }
-
-}
-
+}   
