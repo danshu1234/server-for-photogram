@@ -16,7 +16,6 @@ import * as sharp from 'sharp';
 import { JwtService } from '@nestjs/jwt';
 import * as CryptoJS from 'crypto-js';
 import { v4 as uuidv4 } from 'uuid';
-import { fileTypeFromBuffer } from 'file-type';
 import { emailAndMessIdAndTrueParamEmail } from 'src/messIdInter';
 
 @Injectable()
@@ -1188,6 +1187,7 @@ export class UsersServiceService {
             const findThisMess = findThisChat?.messages.find(el => el.id === body.messId)
             if (findThisMess) {
                 const fileBuffer = Buffer.from(findThisMess.photos[0].buffer)
+                const { fileTypeFromBuffer } = await import('file-type');
                 const fileType = await fileTypeFromBuffer(fileBuffer)
                 return {
                     file: fileBuffer,

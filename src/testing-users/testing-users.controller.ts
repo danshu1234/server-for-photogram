@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Controller, Get, Post, UseInterceptors, UploadedFile, Res, Param } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TestingUsersService } from './testing-users.service';
 import { Response } from 'express';
@@ -8,20 +8,17 @@ export class TestingUsersController {
 
     constructor(private readonly TestingUsersService: TestingUsersService) {}
 
-    @Post('save/file')
+    @Post('save/big/file')
     @UseInterceptors(FileInterceptor('file'))
-    saveFile(@UploadedFile() file: Express.Multer.File) {
-        return this.TestingUsersService.saveFile(file)
+    saveBigFile(@UploadedFile() file: Express.Multer.File) {
+        this.TestingUsersService.saveBigFile(file)
     }
 
-    @Get('file')
-    async getFile(@Res() res: Response) {
-        const archive = await this.TestingUsersService.getFile()
-        res.set({
-            'Content-Type': 'application/zip',
-            'Content-Disposition': 'attachment; filename="file"',
-        });
-        archive.pipe(res)
+    @Get('get/big/file/:id') 
+    async getBigFile(@Param('id') id: string, @Res() res: Response) {
+        const resultBuffer = await this.TestingUsersService.getBigFile(id)
+        res.setHeader('Content-Type', 'video/mp4')
+        return res.send(resultBuffer)
     }
 
 }   
