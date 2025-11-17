@@ -412,11 +412,23 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[]}) {
+    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[]}) {
         let permSize = this.checkSize(resultData.files)
         if (permSize) {
             const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
             const findMe = await this.userModel.findOne({email: resultData.email})
+            let resultFiles: any[] = []
+            if (resultData.per !== '') {
+                const findOrigChat = findMe?.messages.find(el => el.user === resultData.origUser)
+                if (findOrigChat) {
+                    const findMess = findOrigChat.messages.find(el => el.id === resultData.origId)
+                    if (findMess) {
+                        resultFiles = findMess.photos.map(el => Buffer.from(el.buffer))
+                    }
+                }
+            } else {
+                resultFiles = resultData.files.map(el => el.buffer)
+            }
             let resultEncryptedText: string = ''
             if (process.env.ENCRYPTION_KEY) {
                 resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
@@ -429,7 +441,7 @@ export class UsersServiceService {
                     } else {
                         return {
                             ...el,
-                            messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                            messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                             messCount: el.messCount + 1,
                         }
                     }
@@ -454,7 +466,7 @@ export class UsersServiceService {
                 } else {
                     return {
                         ...el,
-                        messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultData.files.map(el => el.buffer), id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                        messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                     }
                 }
             })
@@ -465,26 +477,15 @@ export class UsersServiceService {
 
             let resultPhotos: any = []
 
-            if (resultData.files.length !== 0 && resultData.type === 'text') {
-                resultPhotos = await Promise.all(resultData.files.map(async photo => {
-                if (photo.mimetype === 'image/jpeg') {
-                    const resultBuffer = await sharp(photo.buffer)
-                    .resize(200, 200)
-                    .jpeg({quality: 70})
-                    .toBuffer()
+            if (resultData.type === 'text') {
+                resultPhotos = await Promise.all(resultFiles.map(async photo => {
+                    const resultBuffer = await sharp(photo)
+                        .resize(200, 200)
+                        .jpeg({quality: 70})
+                        .toBuffer()
 
                     return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
-                } else if (photo.mimetype === 'image/png') {
-                    const resultBuffer = await sharp(photo.buffer)
-                    .resize(200, 200)
-                    .png({quality: 70})
-                    .toBuffer()
-
-                    return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
-                } else {
-                    return ''
-                }
-            }))
+                }))
             } 
 
             if (findFriend?.socket !== '') {

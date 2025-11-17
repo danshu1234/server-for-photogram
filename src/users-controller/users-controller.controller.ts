@@ -217,7 +217,7 @@ export class UsersControllerController {
     @Patch('new/mess')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
         return this.UsersService.newMess(resultData)
     }
