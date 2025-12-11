@@ -166,12 +166,12 @@ export class PhotosService {
         return findPhoto?.comments
     }
 
-    async addNewComment(body: {email: string, targetId: string, commentInput: string}) {
+    async addNewComment(body: {email: string, targetId: string, comment: string, type: string, commentId: string}) {
         const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.targetId})
         if (findPhoto?.comments && findUser) {
             const prevComments = findPhoto.comments
-            const resultComments = [...prevComments, {user: findUser.email, comment: body.commentInput, userName: findUser.name}]
+            const resultComments = [...prevComments, {user: findUser.email, comment: body.comment, userName: findUser.name, type: body.type, id: body.commentId}]
             await this.photoModel.findOneAndUpdate({id: body.targetId}, {comments: resultComments}, {new: true})
             return 'OK'
         }
@@ -203,12 +203,12 @@ export class PhotosService {
         }
     }
 
-    async deleteComment(body: {email: string, photoId: string, comment: string}) {
+    async deleteComment(body: {email: string, photoId: string, commentId: string}) {
         const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.photoId})
         if (findUser && findPhoto) {
             const newComments = findPhoto.comments.map(el => {
-                if (el.user === findUser.email && el.comment === body.comment) {
+                if (el.id === body.commentId) {
                     return false
                 } else {
                     return el

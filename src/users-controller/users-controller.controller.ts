@@ -214,18 +214,18 @@ export class UsersControllerController {
         return this.UsersService.getMess(body)
     }
 
-    @Patch('new/mess')
+    @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string}, @Request() req) {
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
         return this.UsersService.newMess(resultData)
     }
-
+    
     @Patch('new/chat')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string}, @Request() req) {
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, videoId?: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
         return this.UsersService.newChat(resultData)
     }
@@ -271,8 +271,8 @@ export class UsersControllerController {
 
     @Patch('delete/mess')
     @UseGuards(CookieJwtGuard)
-    deleteMess(@Body() data: {trueParamEmail: string, index: number, messId: string, readStatus: boolean}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, index: data.index, messId: data.messId, readStatus: data.readStatus}
+    deleteMess(@Body() data: {trueParamEmail: string, index: number, messId: string, readStatus: boolean, typeMess: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, index: data.index, messId: data.messId, readStatus: data.readStatus, typeMess: data.typeMess}
         return this.UsersService.deleteMess(body)
     }
 
@@ -330,8 +330,10 @@ export class UsersControllerController {
     }
 
     @Patch('pin/mess')
-    pinMess(@Body() body: {email: string, trueParamEmail: string, messId: string, pin: boolean}) {
-        this.UsersService.pinMess(body)
+    @UseGuards(CookieJwtGuard)
+    pinMess(@Body() data: {trueParamEmail: string, messId: string, pin: boolean}, @Request() req) {
+        const body = {...data, email: req.user.email}
+        return this.UsersService.pinMess(body)
     }
 
     @Get('get/save/posts/:email')
@@ -488,9 +490,14 @@ export class UsersControllerController {
 
     @Post('video')
     @UseGuards(CookieJwtGuard)
-    getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string}, @Request() req) {
+    async getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string}, @Request() req, @Res() res: Response) {
         const body = {...data, email: req.user.email}
-        return this.UsersService.getVideoMess(body)
+        const archive = await this.UsersService.getVideoMess(body)
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="file"',
+        });
+        archive.pipe(res)
     }
     
     @Post('get/friend/mess/count')
@@ -519,7 +526,7 @@ export class UsersControllerController {
         return this.UsersService.videoMess(body)
     }
 
-    @Get('get/file')
+    @Post('get/file')
     @UseGuards(CookieJwtGuard)
     async getFile(@Body() data: messIdAndTrueParamEmail, @Request() req, @Res() res) {
         const body = {...data, email: req.user.email}
@@ -534,5 +541,6 @@ export class UsersControllerController {
         });
         res.send(file?.file)
     }
+
 
 }

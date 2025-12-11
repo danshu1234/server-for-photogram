@@ -44,11 +44,28 @@ export class TestingUsersService {
             bucketName: 'photoss',
         });
     }
+    
 
-    async saveBigFile(file: Express.Multer.File) {
+    async create() {
+        for (let i=1; i < 51; i++) {
+            const user = new this.userModel({id: i.toString()})
+            await user.save()
+        }
+    }
+
+    async getUser(id: string) {
+        const findUser = await this.userModel.findOne({id: id}).explain('executionStats')
+        return findUser
+    }
+
+    async saveFile(file: Express.Multer.File) {
+        const date = new Date()
+        const photoId = date.getTime().toString()
+
+        const video = new this.userModel({id: photoId})
+        await video.save()
+
         return new Promise((resolve, reject) => {
-            const date = new Date()
-            const photoId = date.getTime().toString()
             const uploadStream = this.bucket.openUploadStream(file.originalname, {
                 metadata: {
                   id: photoId,
@@ -68,22 +85,41 @@ export class TestingUsersService {
         });
     }
 
-    async getBigFile(id: string) {
-        if (this.connection.db) {
-            const fileMetadata = await this.connection.db
-                .collection('photoss.files')  
-                .findOne({ 'metadata.id': id });
-            if (fileMetadata) {
-                const fileBuffer = await new Promise<Buffer>((resolve, reject) => {
-                    const chunks: Buffer[] = [];
-                    const downloadStream = this.bucket.openDownloadStream(fileMetadata._id);
-                    downloadStream.on('data', (chunk) => chunks.push(chunk));
-                    downloadStream.on('end', () => resolve(Buffer.concat(chunks)));
-                    downloadStream.on('error', reject);
-                });
-                return fileBuffer
-            }
+    async getFile(): Promise<Buffer> {
+        const allVideos = await this.userModel.find();
+        
+        if (allVideos.length === 0) {
+            throw new Error('No videos found');
         }
+
+        const resultVideo = allVideos[0];
+        const gridfsFile = await this.bucket
+            .find({ 'metadata.id': resultVideo.id })
+            .next();
+
+        if (!gridfsFile) {
+            throw new Error('Video not found in GridFS');
+        }
+
+        return new Promise((resolve, reject) => {
+            const gridfsId = gridfsFile._id;
+            const fileStream = this.bucket.openDownloadStream(gridfsId);
+
+            const chunks: Buffer[] = [];
+
+            fileStream.on('data', (chunk: Buffer) => {
+                chunks.push(chunk);
+            });
+
+            fileStream.on('error', (error) => {
+                reject(new Error(`Stream error: ${error.message}`));
+            });
+
+            fileStream.on('end', () => {
+                const buffer = Buffer.concat(chunks);
+                resolve(buffer);
+            });
+        });
     }
 
 

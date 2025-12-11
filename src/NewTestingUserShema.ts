@@ -9,9 +9,11 @@ export type NewTestingUserDocument = NewTestingUser & Document;
 @Schema()
 export class NewTestingUser {
     @Prop({ required: animationFrameScheduler })
-    docFile: Buffer;
+    id: string;
 
 }
 
 
 export const NewTestingUserSchema = SchemaFactory.createForClass(NewTestingUser);
+
+NewTestingUserSchema.index({id: 1})

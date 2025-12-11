@@ -67,8 +67,8 @@ export class PhotosController {
 
     @Patch('new/comment')
     @UseGuards(CookieJwtGuard)
-    addNewComment(@Body() data: {targetId: string, commentInput: string}, @Request() req) {
-        const body = {targetId: data.targetId, commentInput: data.commentInput, email: req.user.email}
+    addNewComment(@Body() data: {targetId: string, comment: string, type: string, commentId: string}, @Request() req) {
+        const body = {targetId: data.targetId, comment: data.comment, email: req.user.email, type: data.type, commentId: data.commentId}
         return this.PhotosService.addNewComment(body)
     }
 
@@ -93,8 +93,8 @@ export class PhotosController {
 
     @Patch('delete/comment')
     @UseGuards(CookieJwtGuard)
-    deleteComment(@Body() data: {photoId: string, comment: string}, @Request() req) {
-        const body = {photoId: data.photoId, comment: data.comment, email: req.user.email}
+    deleteComment(@Body() data: {photoId: string, commentId: string}, @Request() req) {
+        const body = {photoId: data.photoId, commentId: data.commentId, email: req.user.email}
         return this.PhotosService.deleteComment(body)
     }
 

@@ -8,17 +8,26 @@ export class TestingUsersController {
 
     constructor(private readonly TestingUsersService: TestingUsersService) {}
 
-    @Post('save/big/file')
-    @UseInterceptors(FileInterceptor('file'))
-    saveBigFile(@UploadedFile() file: Express.Multer.File) {
-        this.TestingUsersService.saveBigFile(file)
+
+    @Post('create')
+    create() {
+        this.TestingUsersService.create()
     }
 
-    @Get('get/big/file/:id') 
-    async getBigFile(@Param('id') id: string, @Res() res: Response) {
-        const resultBuffer = await this.TestingUsersService.getBigFile(id)
-        res.setHeader('Content-Type', 'video/mp4')
-        return res.send(resultBuffer)
+    @Get('get/:id')
+    getUser(@Param('id') id: string) {
+        return this.TestingUsersService.getUser(id)
+    }
+
+    @Post('save/video')
+    @UseInterceptors(FileInterceptor('video'))
+    saveVideo(@UploadedFile() file: Express.Multer.File) {
+        this.TestingUsersService.saveFile(file)
+    }
+
+    @Get('video')
+    async getVideo() {
+        return this.TestingUsersService.getFile()
     }
 
 }   

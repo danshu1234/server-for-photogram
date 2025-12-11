@@ -11,6 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './google.strategy';
 import { TestingUser, TestingUserSchema } from './TestingUserSchema';
+import { Video, VideoSchema } from './VideoSchema';
 
 @Module({
     providers: [UsersServiceService, GoogleStrategy],
@@ -25,6 +26,7 @@ import { TestingUser, TestingUserSchema } from './TestingUserSchema';
             {name: Code.name, schema: CodeSchema}, 
             {name: EnterCode.name, schema: EnterCodeSchema},
             {name: TestingUser.name, schema: TestingUserSchema},
+            {name: Video.name, schema: VideoSchema},
         ]), 
         SocketModule,
         PassportModule,

@@ -6,6 +6,8 @@ export type PhotoDocument = Photo & Document;
 @Schema()
 class Comment {
   @Prop({required: true})
+  id: string;
+  type: string;
   user: string;
   comment: string;
   userName: string;
