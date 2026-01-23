@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { OpenAIController } from './openai.controller';
 import { OpenAIService } from './openai.service';
 import { User, UserSchema } from './UserSchema'
 import { MongooseModule } from '@nestjs/mongoose'
 import { UsersModule } from './user.module'
 
+@Global()
 @Module({
   controllers: [OpenAIController],
   providers: [OpenAIService],

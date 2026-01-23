@@ -15,6 +15,7 @@ import * as sharp from 'sharp';
 import * as archiver from 'archiver';
 import { GridFSBucket } from 'mongodb';
 import { Readable } from 'stream';
+import Message from './MessInterface';
 
 @Injectable()
 export class TestingUsersService {
@@ -46,80 +47,49 @@ export class TestingUsersService {
     }
     
 
-    async create() {
-        for (let i=1; i < 51; i++) {
-            const user = new this.userModel({id: i.toString()})
-            await user.save()
+    async createUser(body: {publicKey: string, name: string}) {
+        const user = new this.userModel({name: body.name, messages: [], messKey: body.publicKey})
+        await user.save()
+        return 'OK'
+    }
+
+    async newMess(body: {resultMess: Message[]}) {
+        const name = 'Danya'
+        const findUser = await this.userModel.findOne({name: name})
+        if (findUser) {
+            const resultMessages = [...findUser.messages, body.resultMess]
+            await this.userModel.findOneAndUpdate({name: name}, {messages: resultMessages}, {new: true})
         }
     }
 
-    async getUser(id: string) {
-        const findUser = await this.userModel.findOne({id: id}).explain('executionStats')
-        return findUser
+    async getPublicKey() {
+        const name: string = 'Danya'
+        const findUser = await this.userModel.findOne({name: name})
+        if (findUser) {
+            return findUser.messKey
+        }
     }
 
-    async saveFile(file: Express.Multer.File) {
-        const date = new Date()
-        const photoId = date.getTime().toString()
-
-        const video = new this.userModel({id: photoId})
-        await video.save()
-
-        return new Promise((resolve, reject) => {
-            const uploadStream = this.bucket.openUploadStream(file.originalname, {
-                metadata: {
-                  id: photoId,
-                },
-            });
-
-        const readableStream = new Readable();
-        readableStream.push(file.buffer);
-        readableStream.push(null);
-
-        readableStream
-          .pipe(uploadStream)
-          .on('error', reject)
-          .on('finish', () => {
-            resolve(uploadStream.id);
-          });
-        });
+    async getAllMess() {
+        const name: string = 'Danya'
+        const findUser = await this.userModel.findOne({name: name})
+        if (findUser) {
+            return findUser.messages
+        }
     }
 
-    async getFile(): Promise<Buffer> {
-        const allVideos = await this.userModel.find();
-        
-        if (allVideos.length === 0) {
-            throw new Error('No videos found');
+    async addKey(body: {publicKey: string}) {
+        const name: string = 'Danya'
+        const findUser = await this.userModel.findOne({name: name})
+        if (findUser) {
+            if (typeof findUser.messKey === 'string') {
+                const newPublicKeys = [body.publicKey]
+                await this.userModel.findOneAndUpdate({name: name}, {messKey: newPublicKeys}, {new: true})
+            } else {
+                const newPublicKeys = [...findUser.messKey, body.publicKey]
+                await this.userModel.findOneAndUpdate({name: name}, {messKey: newPublicKeys}, {new: true})
+            }
         }
-
-        const resultVideo = allVideos[0];
-        const gridfsFile = await this.bucket
-            .find({ 'metadata.id': resultVideo.id })
-            .next();
-
-        if (!gridfsFile) {
-            throw new Error('Video not found in GridFS');
-        }
-
-        return new Promise((resolve, reject) => {
-            const gridfsId = gridfsFile._id;
-            const fileStream = this.bucket.openDownloadStream(gridfsId);
-
-            const chunks: Buffer[] = [];
-
-            fileStream.on('data', (chunk: Buffer) => {
-                chunks.push(chunk);
-            });
-
-            fileStream.on('error', (error) => {
-                reject(new Error(`Stream error: ${error.message}`));
-            });
-
-            fileStream.on('end', () => {
-                const buffer = Buffer.concat(chunks);
-                resolve(buffer);
-            });
-        });
     }
 
 

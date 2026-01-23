@@ -23,13 +23,16 @@ import { Readable } from 'stream';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
 import * as archiver from 'archiver';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PhotoHigh, PhotoHighDocument } from 'src/PhotoHighSchema';
+import { Ava, AvaDocument } from 'src/AvaSchema';
 
 @Injectable()
 export class UsersServiceService {
 
     private bucket: GridFSBucket;
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>) {}
     
     onModuleInit() {
         if (!this.connection.db) {
@@ -39,6 +42,20 @@ export class UsersServiceService {
         this.bucket = new GridFSBucket(this.connection.db, {
             bucketName: 'photosss',
         });
+    }
+
+    @Cron(CronExpression.EVERY_30_SECONDS)
+    async handleEvery30Seconds() {
+        const date = new Date(); 
+        const day = date.getDate()
+        const month = String(date.getMonth() + 1).padStart(2, '0'); 
+        const result = `${day}.${month}`;
+        const allActiveSockets = await this.socketGateway.getAllActiveSockets()
+        const allUsers = await this.getAllUsers()
+        const inactiveSockets = allUsers.filter(el => !allActiveSockets.includes(el.socket)).map(el => el.socket)
+        for (let inactiveSocket of inactiveSockets) {
+            await this.userModel.findOneAndUpdate({socket: inactiveSocket}, {onlineStatus: result})
+        }
     }
 
     async getVideo(videoMessId: string): Promise<{buffer: Buffer, filename: string}> {
@@ -107,11 +124,15 @@ export class UsersServiceService {
         })
         return newChats 
     }
+
+    isBufferPhoto(photo: any): photo is { buffer: any } {
+        return photo && typeof photo === 'object' && 'buffer' in photo;
+    }
     
-    async enter(body: {login: string, password: string}, response: any) {
-        const findUser = await this.userModel.findOne({email: body.login})
+    async enter(body: {login: string, password: string, mobile?: string}, response: any) {
+        const findUser = await this.userModel.findOne({email: body.login.trim()})
         if (findUser && findUser.password) {
-            const checkPass = await argon2.verify(findUser.password, body.password)
+            const checkPass = await argon2.verify(findUser.password, body.password.trim())
             if (checkPass === true) {
                 const refreshToken = uuidv4()
                 const resultRefreshToken = await argon2.hash(refreshToken)
@@ -120,13 +141,20 @@ export class UsersServiceService {
                 const time = date.getTime()
                 const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
                 await newRefreshToken.save()
-                response.cookie('accessToken', token, {
-                    httpOnly: true,
-                    sameSite: 'strict',
-                    maxAge: 60 * 60 * 1000, 
-                });
-                return {
-                    refreshToken: refreshToken,
+                if (!body.mobile) {
+                        response.cookie('accessToken', token, {
+                        httpOnly: true,
+                        sameSite: 'strict',
+                        maxAge: 60 * 60 * 1000, 
+                    });
+                    return {
+                        refreshToken: refreshToken,
+                    }
+                } else {
+                    return {
+                        access: token,
+                        refreshToken: refreshToken,
+                    }
                 }
             } else {
                 throw new BadRequestException()
@@ -299,21 +327,37 @@ export class UsersServiceService {
     }
 
     async getAva(email: string) {
-        const findUser = await this.userModel.findOne({email: email})
-        if (findUser?.avatar === '') {
-            return ''
+        const findAva = await this.avaModel.findOne({email: email})
+        if (findAva) {
+            return findAva.avatar
         } else {
-            return findUser?.avatar
+            return ''
         }
     }
 
     async newAvatar(body: {targetEmail: string, newAva: string}) {
-        await this.userModel.findOneAndUpdate({email: body.targetEmail}, {avatar: body.newAva}, {new: true})
+        const findAva = await this.avaModel.findOne({email: body.targetEmail}) 
+        if (findAva) {
+            await this.avaModel.findOneAndUpdate({email: body.targetEmail}, {avatar: body.newAva}, {new: true})
+            await this.userModel.findOneAndUpdate({email: body.targetEmail}, {avatar: ''}, {new: true})
+        } else {
+            const ava = new this.avaModel({email: body.targetEmail, avatar: body.newAva})
+            await ava.save()
+        }
     }
 
     async getAllUsers() {
-        const allUsers = await this.userModel.find({}, {messages: 0, password: 0})
-        return allUsers
+        const allUsers = await this.userModel.find({}, {messages: 0, password: 0}).lean()
+        let resultAllUsers: any[] = []
+        for (let user of allUsers) {
+            const userAvatar = await this.avaModel.findOne({email: user.email})
+            if (userAvatar) {
+                resultAllUsers = [...resultAllUsers, {...user, avatar: userAvatar.avatar}]
+            } else {
+                resultAllUsers = [...resultAllUsers, user]
+            }
+        }
+        return resultAllUsers
     }
 
     async checkOpen(email: string) {
@@ -384,9 +428,15 @@ export class UsersServiceService {
     }
 
     async getUserData(email: string) {
-        const findUser = await this.userModel.findOne({email: email}, {code: 0, messages: 0, password: 0})
+        const findUser = await this.userModel.findOne({email: email}, {code: 0, messages: 0, password: 0}).lean()
         if (findUser) {
-            return findUser
+            const userAvatar = await this.avaModel.findOne({email: findUser.email})
+            if (userAvatar) {
+                const resultUser = {...findUser, avatar: userAvatar.avatar}
+                return resultUser
+            } else {
+                return findUser
+            }
         } else {
             return false
         }
@@ -449,14 +499,6 @@ export class UsersServiceService {
                         const resultMessages = await Promise.all(findChat.messages.map(async message => {
                             if (message.photos.length !== 0) {
                                 if (message.typeMess === 'text') {
-                                    const resultBuffers = await Promise.all(message.photos.map(async photo => {
-                                        const buffer = Buffer.from(photo.buffer);
-                                        const resultBuffer = await sharp(buffer)
-                                        .resize(350, 250)
-                                        .jpeg({quality: 90})
-                                        .toBuffer()
-                                        return resultBuffer
-                                    }))
                                     let resultText: string = ''
                                     if (process.env.ENCRYPTION_KEY) {
                                         resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
@@ -464,7 +506,6 @@ export class UsersServiceService {
                                     return {
                                         ...message,
                                         text: resultText,
-                                        photos: resultBuffers.map(el => `data:image/jpeg;base64,${el.toString('base64')}`)
                                     }
                                 } else {
                                     return {...message, photos: []}
@@ -482,7 +523,7 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[], videoId?: string}) {
+    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
@@ -493,13 +534,47 @@ export class UsersServiceService {
                 const findMess = findOrigChat.messages.find(el => el.id === resultData.origId)
                 if (findMess) {
                     if (findMess.typeMess !== 'video') {
-                        resultFiles = findMess.photos.map(el => Buffer.from(el.buffer))
+                        const resultPhotoFiles = await Promise.all(
+                            findMess.photos.map(async(el) => {
+                                const findHighPhoto = await this.photoHighModel.findOne({id: el.id})
+                                if (findHighPhoto) {
+                                    const photoHighId = uuidv4()
+                                    const photoHigh = new this.photoHighModel({photo: findHighPhoto.photo, id: photoHighId})
+                                    await photoHigh.save()
+                                    return {
+                                        base64: el.base64,
+                                        id: photoHighId,
+                                    }
+                                }
+                            })
+                        )
+                        resultFiles = resultPhotoFiles
                     }
                 }
             }
         } else {
             if (resultData.type !== 'video') {
-                resultFiles = resultData.files.map(el => el.buffer)
+                if (resultData.type === 'file') {
+                    resultFiles = resultData.files.map(el => el.buffer)
+                } else if (resultData.type === 'text') {
+                    const resultPhotoFiles = await Promise.all(
+                        resultData.files.map(async(el) => {
+                            const resultBuffer = await sharp(el.buffer)
+                            .resize(200, 200)
+                            .jpeg({quality: 70})
+                            .toBuffer()
+                            const base64 = `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
+                            const photoHighId = uuidv4()
+                            const photoHigh = new this.photoHighModel({id: photoHighId, photo: el.buffer})
+                            await photoHigh.save()
+                            return {
+                                base64: base64,
+                                id: photoHighId,
+                            }
+                        })
+                    );
+                    resultFiles = resultPhotoFiles
+                }
             }
         }
         if (resultData.type === 'video') {
@@ -530,16 +605,30 @@ export class UsersServiceService {
                         }
                     } else {
                         if (resultData.videoId) {
-                            return {
-                                ...el,
-                                messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                                messCount: el.messCount + 1,
+                            if (resultData.email !== resultData.trueParamEmail) {
+                                return {
+                                    ...el,
+                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messCount: el.messCount + 1,
+                                }
+                            } else {
+                                return {
+                                    ...el,
+                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                }
                             }
                         } else {
-                            return {
-                                ...el,
-                                messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                                messCount: el.messCount + 1,
+                            if (resultData.email !== resultData.trueParamEmail) {
+                                return {
+                                    ...el,
+                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messCount: el.messCount + 1,
+                                }
+                            } else {
+                                return {
+                                    ...el,
+                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                }                               
                             }
                         }
                     }
@@ -587,59 +676,136 @@ export class UsersServiceService {
         }
         let resultPhotos: any = []
         if (resultData.type === 'text') {
-            resultPhotos = await Promise.all(resultFiles.map(async photo => {
-                const resultBuffer = await sharp(photo)
-                    .resize(200, 200)
-                    .jpeg({quality: 70})
-                    .toBuffer()
-                return `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
-            }))
+            resultPhotos = resultFiles
         } 
         if (findFriend?.socket !== '') {
             if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
-                this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                if (resultData.type === 'video') {
+                    if (resultData.videoId) {
+                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    } else {
+                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    }
+                } else {
+                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                }
             }
         }
-        return 'OK'
+        return {
+            status: 'OK',
+            photos: resultFiles,
+        }
     }
 
-    async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, files: Express.Multer.File[], videoId?: string}) {
-            const findMe = await this.userModel.findOne({email: resultData.email})
-            const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
-            let resultEncryptedText: string = ''
-            if (process.env.ENCRYPTION_KEY) {
-                resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
-            }
-            const date = new Date(); 
-            const day = date.getDate().toString().padStart(2, '0'); 
-            const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
-            const year = date.getFullYear().toString().slice(-2);
-            const formattedDate = `${day}.${month}.${year}`
-            const id = date.getTime().toString()
-            if (findMe?.messages) {
-                const newMessages = [...findMe.messages, {user: resultData.trueParamEmail, messages: [{user: findMe.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 0, pin: false, notifs: true}]
-                await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessages}, {new: true})
-            }
-            if (findFriend?.messages) {
-                const findThisChat = findFriend.messages.find(el => el.user === resultData.email)
-                if (!findThisChat) {
-                    const newMessages = [...findFriend.messages, {user: findMe?.email, messages: [{user: findMe?.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
-                    await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
-                } else {
-                    const newMessages = {...findThisChat, messages: [...findThisChat.messages, {user: findMe?.email, text: resultEncryptedText, photos: resultData.files.map(el => el.buffer), date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: findThisChat.messCount + 1}
-                    const resultFriendChats = findFriend.messages.map(el => {
-                        if (el.user === resultData.email) {
-                            return newMessages
-                        } else {
-                            return el
-                        }
-                    })
-                    if (resultData.email !== resultData.trueParamEmail) {
-                        await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: resultFriendChats}, {new: true})
+    async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[], videoId?: string}) {
+        const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
+        const findMe = await this.userModel.findOne({email: resultData.email})
+        const videoId: string = uuidv4()
+        let resultFiles: any[] = []
+        if (resultData.per !== '') {
+            const findOrigChat = findMe?.messages.find(el => el.user === resultData.origUser)
+            if (findOrigChat) {
+                const findMess = findOrigChat.messages.find(el => el.id === resultData.origId)
+                if (findMess) {
+                    if (findMess.typeMess !== 'video') {
+                        const resultPhotoFiles = await Promise.all(
+                            findMess.photos.map(async(el) => {
+                                const findHighPhoto = await this.photoHighModel.findOne({id: el.id})
+                                if (findHighPhoto) {
+                                    const photoHighId = uuidv4()
+                                    const photoHigh = new this.photoHighModel({photo: findHighPhoto.photo, id: photoHighId})
+                                    await photoHigh.save()
+                                    return {
+                                        base64: el.base64,
+                                        id: photoHighId,
+                                    }
+                                }
+                            })
+                        )
+                        resultFiles = resultPhotoFiles
                     }
                 }
             }
-            return 'OK'
+        } else {
+            if (resultData.type !== 'video') {
+                if (resultData.type === 'file') {
+                    resultFiles = resultData.files.map(el => el.buffer)
+                } else if (resultData.type === 'text') {
+                    const resultPhotoFiles = await Promise.all(
+                        resultData.files.map(async(el) => {
+                            const resultBuffer = await sharp(el.buffer)
+                            .resize(200, 200)
+                            .jpeg({quality: 70})
+                            .toBuffer()
+                            const base64 = `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
+                            const photoHighId = uuidv4()
+                            const photoHigh = new this.photoHighModel({id: photoHighId, photo: el.buffer})
+                            await photoHigh.save()
+                            return {
+                                base64: base64,
+                                id: photoHighId,
+                            }
+                        })
+                    );
+                    resultFiles = resultPhotoFiles
+                }
+            }
+        }
+        if (resultData.type === 'video') {
+            if (resultData.per === '') {
+                if (resultData.videoId) {
+                    await this.saveVideoFile(resultData.files[0].buffer, resultData.text, resultData.videoId)
+                }
+            } else {
+                const getThisVideo = await this.getVideo(resultData.text)
+                await this.saveVideoFile(getThisVideo.buffer, getThisVideo.filename, videoId)
+            }
+        }
+        let resultEncryptedText: string = ''
+        if (process.env.ENCRYPTION_KEY) {
+            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
+        }
+        let newFriendMess: any = []
+        let newMessForMe: any = []
+        if (findFriend && findMe) {
+            if (resultData.type !== 'video') {
+                newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
+                newMessForMe = [{user: resultData.trueParamEmail, messages: [{user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 0, pin: false, notifs: true}, ...findMe.messages]
+            } else {
+                if (resultData.videoId) {
+                    newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
+                    newMessForMe = [{user: resultData.trueParamEmail, messages: [{user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 0, pin: false, notifs: true}, ...findMe.messages]
+                } else {
+                    newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
+                    newMessForMe = [{user: resultData.trueParamEmail, messages: [{user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 0, pin: false, notifs: true}, ...findMe.messages]
+                }
+            }
+        }
+        await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendMess}, {new: true})
+        if (resultData.email !== resultData.trueParamEmail) {
+            await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessForMe}, {new: true})
+        }
+        let resultPhotos: any = []
+        if (resultData.type === 'text') {
+            resultPhotos = resultFiles
+        } 
+        if (findFriend?.socket !== '') {
+            if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
+                if (resultData.type === 'video') {
+                    if (resultData.videoId) {
+                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    } else {
+                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    }
+                } else {
+                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                }
+            }
+        }
+        return {
+            status: 'OK',
+            photos: resultFiles,
+        }
     }   
 
     async zeroMess(body: EmailAndTrueParamEmail) {
@@ -677,7 +843,6 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: email})
         return findUser?.banMess
     }
-
     async banUser(body: EmailAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email})
         const prevBanUsers = findUser?.banMess
@@ -695,21 +860,34 @@ export class UsersServiceService {
         }
     }
 
-    async deleteMess(body: {email: string, trueParamEmail: string, index: number, messId: string, readStatus: boolean, typeMess: string}) {
+    async deleteMess(body: {email: string, trueParamEmail: string, messId: string[], unreadCount: number}) {
         let newMess: any = []
-        let messText: string | undefined = ''
+        let deleteVideoId: string[] = []
+        let deletePhotoId: any[] = []
         const findMe = await this.userModel.findOne({email: body.email})
         const newChats = findMe?.messages.map(el => {
-            if (el.user === body.trueParamEmail) {
-                messText = el.messages.find(el => el.id === body.messId)?.text
-                const newMessages = el.messages.filter((el, index) => el.id !== body.messId)
-                return {
-                    ...el,
-                    messages: newMessages,
-                }
-            } else {
-                return el
+           if (el.user === body.trueParamEmail) {
+                const newMessForMe = el.messages.map(el => {
+                    if (body.messId.includes(el.id)) {
+                        if (el.typeMess === 'video') {
+                            deleteVideoId = [...deleteVideoId, el.text]
+                        }
+                        if (el.typeMess === 'text' && el.photos.length !== 0) {
+                            deletePhotoId = [...deletePhotoId, ...el.photos.map(element => element.id)]
+                        }
+                        return false
+                    } else {
+                        return el
+                    }
+                })
+            const resultNewMessForMe = newMessForMe.filter(el => el !== false)
+            return {
+                ...el,
+                messages: resultNewMessForMe,
             }
+           } else {
+               return el
+           }
         })
 
         await this.userModel.findOneAndUpdate({email: body.email}, {messages: newChats}, {new: true})
@@ -717,19 +895,19 @@ export class UsersServiceService {
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         const newFriendChats = findFriend?.messages.map(el => {
             if (el.user === body.email) {
-                const newMessages = el.messages.filter((el, index) => index !== body.index)
+                const newMessForFriend = el.messages.map(el => {
+                    if (body.messId.includes(el.id)) {
+                        return false
+                    } else {
+                        return el
+                    }
+                })
+                const newMessages = newMessForFriend.filter(el => el !== false)
                 newMess = newMessages
-                if (body.readStatus === false) {
-                    return {
-                        ...el,
-                        messages: newMessages,
-                        messCount: el.messCount - 1,
-                    }
-                } else {
-                    return {
-                        ...el,
-                        messages: newMessages,
-                    }
+                return {
+                    ...el,
+                    messages: newMessages,
+                    messCount: el.messCount - body.unreadCount
                 }
             } else {
                 return el
@@ -737,8 +915,19 @@ export class UsersServiceService {
         })
         await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
 
+        console.log('PhotoId: ')
+        console.log(deletePhotoId)
+
+        if (deletePhotoId.length !== 0) {
+            for (let item of deletePhotoId) {
+                await this.photoHighModel.findOneAndDelete({id: item})
+            }
+        }
+
         if (findFriend?.socket !== undefined) {
-            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: '', readStatus: body.readStatus}})
+            console.log('MessId: ')
+            console.log(body.messId)
+            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: '', readStatus: false}})
         }
 
         if (newMess.length === 0) {
@@ -748,13 +937,15 @@ export class UsersServiceService {
             await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {messages: newFriendChats}, {new: true})
         }
 
-        if (body.typeMess === 'video') {
-            const gridfsFile = await this.bucket
-                .find({ 'metadata.id': messText })
-                .next();
+        if (deleteVideoId.length !== 0) {
+            for (let item of deleteVideoId) {
+                const gridfsFile = await this.bucket
+                    .find({ 'metadata.id': item })
+                    .next();
 
-            if (gridfsFile) {
-                await this.bucket.delete(gridfsFile._id);
+                if (gridfsFile) {
+                    await this.bucket.delete(gridfsFile._id);
+                }
             }
         }
         
@@ -1035,13 +1226,20 @@ export class UsersServiceService {
                         await this.codeModel.findOneAndDelete({email: body.login, code: body.code})
                         const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
                         await newRefreshToken.save()
-                        response.cookie('accessToken', token, {
-                            httpOnly: true,
-                            sameSite: 'strict',
-                            maxAge: 60 * 60 * 1000, 
-                        });
-                        return {
-                            refreshToken: refreshToken,
+                        if (!body.mobile) {
+                            response.cookie('accessToken', token, {
+                                httpOnly: true,
+                                sameSite: 'strict',
+                                maxAge: 60 * 60 * 1000, 
+                            });
+                            return {
+                                refreshToken: refreshToken,
+                            }
+                        } else {
+                            return {
+                                accessToken: token,
+                                refreshToken: resultRefreshToken,
+                            }
                         }
                     } else {
                         throw new BadRequestException('Неверный код')   
@@ -1105,7 +1303,7 @@ export class UsersServiceService {
         return {name: findMe?.name, friendPeer: findFriend?.peerId}
     }
 
-    async getNewToken(body: {refreshToken: string}, response: any) {
+    async getNewToken(body: {refreshToken: string, token?: string}, response: any) {
         const allRefreshTokens = await this.refreshTokensModel.find().lean()
         let resultRefreshToken: any = null
         for (let item of allRefreshTokens) {
@@ -1123,13 +1321,20 @@ export class UsersServiceService {
                 const refreshToken = uuidv4()
                 const resultToken = await argon2.hash(refreshToken)
                 await this.refreshTokensModel.findOneAndUpdate({token: resultRefreshToken.token}, {token: resultToken}, {new: true})
-                response.cookie('accessToken', resultAccessToken, {
-                    httpOnly: true,
-                    sameSite: 'strict',
-                    maxAge: 60 * 60 * 1000, 
-                });
-                return {
-                    refreshToken: refreshToken,
+                if (!body.token) {
+                        response.cookie('accessToken', resultAccessToken, {
+                        httpOnly: true,
+                        sameSite: 'strict',
+                        maxAge: 60 * 60 * 1000, 
+                    });
+                    return {
+                        refreshToken: refreshToken,
+                    }
+                } else {
+                    return {
+                        accessToken: resultAccessToken,
+                        refreshToken: refreshToken,
+                    }
                 }
             } else {
                 await this.refreshTokensModel.findOneAndDelete({token: resultRefreshToken.token})
@@ -1141,7 +1346,7 @@ export class UsersServiceService {
     }
 
     async deleteAvatar(email: string) {
-        await this.userModel.findOneAndUpdate({email: email}, {avatar: ''}, {new: true})
+        await this.avaModel.findOneAndDelete({email: email})
     }
 
     async googleEnter(userEmail: string, name: string) {
@@ -1264,20 +1469,6 @@ export class UsersServiceService {
         }
     }
 
-    async videoMess(body: emailAndMessIdAndTrueParamEmail) {
-        const findUser = await this.userModel.findOne({email: body.email})
-        if (findUser) {
-            const userMess = findUser.messages
-            const findThisChat = userMess.find(el => el.user === body.trueParamEmail)
-            const findThisMess = findThisChat?.messages.find(el => el.id === body.messId)
-            if (findThisMess) {
-                const videoBuffer = Buffer.from(findThisMess.photos[0].buffer)
-                const resultVideo = `data:video/mp4;base64,${videoBuffer.toString('base64')}`
-                return resultVideo
-            }
-        }
-    }
-
     async getFile(body: emailAndMessIdAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email})
         if (findUser) {
@@ -1285,15 +1476,75 @@ export class UsersServiceService {
             const findThisChat = userMess.find(el => el.user === body.trueParamEmail)
             const findThisMess = findThisChat?.messages.find(el => el.id === body.messId)
             if (findThisMess) {
-                const fileBuffer = Buffer.from(findThisMess.photos[0].buffer)
-                const { fileTypeFromBuffer } = await import('file-type');
-                const fileType = await fileTypeFromBuffer(fileBuffer)
-                return {
-                    file: fileBuffer,
-                    type: fileType?.mime,
+                if (this.isBufferPhoto(findThisMess.photos[0])) {
+                    const fileBuffer = Buffer.from(findThisMess.photos[0].buffer)
+                    const { fileTypeFromBuffer } = await import('file-type');
+                    const fileType = await fileTypeFromBuffer(fileBuffer)
+                    return {
+                        file: fileBuffer,
+                        type: fileType?.mime,
+                    }
                 }
             }
         }
+    }
+
+    async getBigPhotos(body: {messId: string, email: string, trueParamEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const targetChat = findUser.messages.find(chat => chat.user === body.trueParamEmail)
+            if (targetChat) {
+                const findMess = targetChat.messages.find(el => el.id === body.messId)
+                if (findMess) {
+                    const archive = archiver('zip')
+                    const bigPhotosId = findMess.photos.map(photo => photo.id)
+                    let bigPhotoBuffers: Buffer[] = []
+                    for (let item of bigPhotosId) {
+                        const findBuffer = await this.photoHighModel.findOne({id: item})
+                        if (findBuffer) {
+                            bigPhotoBuffers = [...bigPhotoBuffers, findBuffer.photo]
+                        }
+                    }
+                    bigPhotoBuffers.forEach((bigPhoto, index) => {
+                        archive.append(bigPhoto, {name: `${index}`})
+                    })
+                    archive.finalize()
+                    return archive
+                }
+            }
+        }
+    }
+
+    async findUser(user: string) {
+        const userFind = await this.userModel.findOne({email: user})
+        if (userFind) {
+            return 'OK'
+        } else {
+            return 'NO'
+        }
+    }
+
+    async getUserInfo(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        const userAvatar = await this.avaModel.findOne({email: email})
+        if (findUser) {
+            if (userAvatar) {
+                return {
+                    avatar: userAvatar.avatar,
+                    name: findUser.name,
+                }
+            } else {
+                return {
+                    avatar: '',
+                    name: findUser.name,
+                }
+            }
+        }
+    }
+
+    async newName(body: {email: string, name: string}) {
+        await this.userModel.findOneAndUpdate({email: body.email}, {name: body.name}, {new: true})
+        return 'OK'
     }
 
 }

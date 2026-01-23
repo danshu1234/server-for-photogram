@@ -1,7 +1,9 @@
-import { Controller, Get, Post, UseInterceptors, UploadedFile, Res, Param } from '@nestjs/common';
+import { Controller, Get, Post, UseInterceptors, UploadedFile, Res, Param, Body, Patch } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TestingUsersService } from './testing-users.service';
 import { Response } from 'express';
+import Message from './MessInterface';
+
 
 @Controller('testing-users')
 export class TestingUsersController {
@@ -9,25 +11,29 @@ export class TestingUsersController {
     constructor(private readonly TestingUsersService: TestingUsersService) {}
 
 
-    @Post('create')
-    create() {
-        this.TestingUsersService.create()
+    @Post('user/create')
+    createUser(@Body() body: {publicKey: string, name: string}) {
+        return this.TestingUsersService.createUser(body)
     }
 
-    @Get('get/:id')
-    getUser(@Param('id') id: string) {
-        return this.TestingUsersService.getUser(id)
+    @Patch('new/mess')
+    newMess(@Body() body: {resultMess: Message[]}) {
+        return this.TestingUsersService.newMess(body)
     }
 
-    @Post('save/video')
-    @UseInterceptors(FileInterceptor('video'))
-    saveVideo(@UploadedFile() file: Express.Multer.File) {
-        this.TestingUsersService.saveFile(file)
+    @Get('public/key')
+    getPublicKey() {
+        return this.TestingUsersService.getPublicKey()
+    }
+    
+    @Get('all/mess')
+    getAllMess() {
+        return this.TestingUsersService.getAllMess()
     }
 
-    @Get('video')
-    async getVideo() {
-        return this.TestingUsersService.getFile()
+    @Patch('add/key')
+    addKey(@Body() body: {publicKey: string}) {
+        this.TestingUsersService.addKey(body)
     }
 
 }   

@@ -5,6 +5,7 @@ import { Photo, PhotoSchema } from './PhotoSchema'
 import { User, UserSchema } from './UserSchema'
 import { MongooseModule } from '@nestjs/mongoose'
 import { UsersModule } from './user.module'
+import { PhotoHigh } from './PhotoHighSchema'
 
 @Module({
   providers: [PhotosService],

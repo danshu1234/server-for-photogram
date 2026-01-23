@@ -7,7 +7,7 @@ import { Model } from 'mongoose';
 @Injectable()
 export class OpenAIService {
   private readonly apiKey: string;
-  private readonly apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyCAPFB2qdSO-A54VDXzLIoU3013IFstKhU';
+  private readonly apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyB5siRsjSTIiXX69g6xgEx9FUOqdPNLVQo';
 
   constructor(private configService: ConfigService, @InjectModel(User.name) private userModel: Model<UserDocument>) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');

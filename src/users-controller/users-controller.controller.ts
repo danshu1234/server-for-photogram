@@ -13,14 +13,13 @@ import { Response } from 'express';
 import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 import { messIdAndTrueParamEmail } from 'src/messIdInter';
 
-@Controller('users-controller')
-export class UsersControllerController {
+@Controller('users-controller')export class UsersControllerController {
 
     constructor(private readonly UsersService: UsersServiceService){}
 
 
     @Post('enter')
-    enter(@Body() body: {login: string, password: string}, @Res({ passthrough: true }) response: Response) {
+    enter(@Body() body: {login: string, password: string, mobile?: string}, @Res({ passthrough: true }) response: Response) {
         return this.UsersService.enter(body, response)
     }
 
@@ -225,7 +224,7 @@ export class UsersControllerController {
     @Patch('new/chat')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, videoId?: string}, @Request() req) {
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string}, @Request() req) {
         const resultData = {...body, files: files, email: req.user.email}
         return this.UsersService.newChat(resultData)
     }
@@ -271,8 +270,8 @@ export class UsersControllerController {
 
     @Patch('delete/mess')
     @UseGuards(CookieJwtGuard)
-    deleteMess(@Body() data: {trueParamEmail: string, index: number, messId: string, readStatus: boolean, typeMess: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, index: data.index, messId: data.messId, readStatus: data.readStatus, typeMess: data.typeMess}
+    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], unreadCount: number}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
         return this.UsersService.deleteMess(body)
     }
 
@@ -519,13 +518,6 @@ export class UsersControllerController {
         this.UsersService.openChat(body)
     }
 
-    @Post('video/mess')
-    @UseGuards(CookieJwtGuard)
-    videoMess(@Body() data: messIdAndTrueParamEmail, @Request() req) {
-        const body = {...data, email: req.user.email}
-        return this.UsersService.videoMess(body)
-    }
-
     @Post('get/file')
     @UseGuards(CookieJwtGuard)
     async getFile(@Body() data: messIdAndTrueParamEmail, @Request() req, @Res() res) {
@@ -540,6 +532,21 @@ export class UsersControllerController {
             'Expires': '0'
         });
         res.send(file?.file)
+    }
+
+    @Post('big/photos')
+    @UseGuards(CookieJwtGuard)
+    async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string}, @Request() req, @Res() res: Response) {
+        console.log(data)
+        const body = {...data, email: req.user.email}
+        const archive = await this.UsersService.getBigPhotos(body)
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="photos_${data.messId}.zip"`,
+        });
+        if (archive) {
+            archive.pipe(res)
+        }
     }
 
 

@@ -12,10 +12,13 @@ import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './google.strategy';
 import { TestingUser, TestingUserSchema } from './TestingUserSchema';
 import { Video, VideoSchema } from './VideoSchema';
+import { MobileControllerController } from './mobile.controller';
+import { PhotoHigh, PhotoHighSchema } from './PhotoHighSchema';
+import { Ava, AvaSchema } from './AvaSchema';
 
 @Module({
     providers: [UsersServiceService, GoogleStrategy],
-    controllers: [UsersControllerController],
+    controllers: [UsersControllerController, MobileControllerController],
     imports: [
         ConfigModule.forRoot({
             isGlobal: true, 
@@ -27,6 +30,8 @@ import { Video, VideoSchema } from './VideoSchema';
             {name: EnterCode.name, schema: EnterCodeSchema},
             {name: TestingUser.name, schema: TestingUserSchema},
             {name: Video.name, schema: VideoSchema},
+            {name: PhotoHigh.name, schema: PhotoHighSchema},
+            {name: Ava.name, schema: AvaSchema},
         ]), 
         SocketModule,
         PassportModule,

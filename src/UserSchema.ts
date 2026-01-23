@@ -5,6 +5,15 @@ import { AnimationFrameScheduler } from 'rxjs/internal/scheduler/AnimationFrameS
 export type UserDocument = User & Document;
 
 @Schema()
+export class PhotoMess {
+  @Prop({ required: false })
+  id: string;
+
+  @Prop({ required: true })
+  base64: string;
+}
+
+@Schema()
 export class BotMess {
   @Prop({ required: true })
   type: string;
@@ -34,7 +43,7 @@ export class Message {
   text: string;
 
   @Prop({ required: AnimationFrameScheduler })
-  photos: Buffer[];
+  photos: PhotoMess[] | Buffer[];
 
   @Prop({ required: true })
   date: string;

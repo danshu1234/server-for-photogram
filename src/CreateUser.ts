@@ -23,4 +23,6 @@ export class CreateUser {
     @IsNotEmpty({message: 'Пожалйуста, введите код'})
     @IsString()
     code: string;
+
+    mobile?: string;
 }

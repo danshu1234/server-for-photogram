@@ -5,11 +5,26 @@ import { animationFrameScheduler } from 'rxjs';
 export type NewTestingUserDocument = NewTestingUser & Document;
 
 @Schema()
+class Message{
+    @Prop()
+    message: string;
+
+    @Prop()
+    nonce: string
+
+}
+
 
 @Schema()
 export class NewTestingUser {
     @Prop({ required: animationFrameScheduler })
-    id: string;
+    name: string;
+
+    @Prop()
+    messages: Message[][];
+
+    @Prop()
+    messKey: string[];
 
 }
 
