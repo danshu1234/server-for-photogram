@@ -116,7 +116,7 @@ export class User {
   notifs: Notification[];
 
   @Prop({ required: false })
-  socket: string;
+  socket: string[];
 
   @Prop({ required: false })
   peerId: string;

@@ -235,7 +235,19 @@ export class UsersServiceService {
     }
 
     async addSocket(body: {email: string, socketId: string}) {
-        await this.userModel.findOneAndUpdate({email: body.email}, {socket: body.socketId}, {new: true})
+        const findUser = await this.userModel.findOne({email: body.email})
+        const allActiveSockets = await this.socketGateway.getAllActiveSockets()
+        if (findUser) {
+            const userSockets = findUser.socket.map(socket => {
+                if (!allActiveSockets.includes(socket)) {
+                    return false
+                } else {
+                    return socket
+                }
+            })
+            const resultUserSockets = [...userSockets.filter(el => el !== false), body.socketId]
+            await this.userModel.findOneAndUpdate({email: body.email}, {socket: resultUserSockets}, {new: true})
+        }
     }
 
     async clearSocket(body: {email: string}) {
@@ -675,16 +687,22 @@ export class UsersServiceService {
         if (resultData.type === 'text') {
             resultPhotos = resultFiles
         } 
-        if (findFriend?.socket !== '') {
+        if (findFriend?.socket) {
             if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
                 if (resultData.type === 'video') {
                     if (resultData.videoId) {
-                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        for (let socket of findFriend.socket) {
+                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        }
                     } else {
-                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        for (let socket of findFriend.socket) {
+                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        }
                     }
                 } else {
-                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    for (let socket of findFriend.socket) {
+                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    }
                 }
             }
         }
@@ -782,16 +800,22 @@ export class UsersServiceService {
         if (resultData.type === 'text') {
             resultPhotos = resultFiles
         } 
-        if (findFriend?.socket !== '') {
+        if (findFriend?.socket) {
             if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
                 if (resultData.type === 'video') {
                     if (resultData.videoId) {
-                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        for (let socket of findFriend.socket) {
+                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        }
                     } else {
-                        this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        for (let socket of findFriend.socket) {
+                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        }
                     }
                 } else {
-                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    for (let socket of findFriend.socket) {
+                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                    }
                 }
             }
         }
@@ -823,7 +847,9 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: body.trueParamEmail})
         const findSocket = findUser?.socket
         if (findSocket) {
-            this.socketGateway.handleNewMessage({targetSocket: findSocket, message: {type: 'typing', user: body.email, text: '', photos: []}})
+            for (let socket of findSocket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'typing', user: body.email, text: '', photos: []}})
+            }
         }
     }
 
@@ -920,7 +946,9 @@ export class UsersServiceService {
         if (findFriend?.socket !== undefined) {
             console.log('MessId: ')
             console.log(body.messId)
-            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: '', readStatus: false}})
+            for (let socket of findFriend.socket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'delete', user: body.email, text: '', photos: [], id: body.messId, ans: '', readStatus: body.unreadCount}})
+            }
         }
 
         if (newMess.length === 0) {
@@ -1010,7 +1038,9 @@ export class UsersServiceService {
                             }
                         }
                     })
-                    this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: resultMessages}})
+                    for (let socket of findFriend.socket) {
+                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'editMess', user: findMe.email, text: '', photos: [], mess: resultMessages}})
+                    }
                 }
             }
         }
@@ -1039,7 +1069,9 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: body.trueParamEmail})
         const userSocket = findUser?.socket
         if (userSocket) {
-            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'startVoice', user: body.email, text: '', photos: [], mess: []}})
+            for (let socket of userSocket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'startVoice', user: body.email, text: '', photos: [], mess: []}})
+            }
         }
     }
 
@@ -1047,7 +1079,9 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: body.trueParamEmail})
         const userSocket = findUser?.socket
         if (userSocket) {
-            this.socketGateway.handleNewMessage({targetSocket: userSocket, message: {type: 'stopVoice', user: body.email, text: '', photos: [], mess: []}})
+            for (let socket of userSocket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'stopVoice', user: body.email, text: '', photos: [], mess: []}})
+            }
         }
     }
 
@@ -1452,14 +1486,18 @@ export class UsersServiceService {
     async readMess(body: {targetEmail: string}) {
         const findFriend = await this.userModel.findOne({email: body.targetEmail})
         if (findFriend) {
-            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'readMess', user: '', text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+            for (let socket of findFriend.socket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'readMess', user: '', text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+            }
         }
     }
 
     async openChat(body: {email: string, trueParamEmail: string}) {
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         if (findFriend) {
-            this.socketGateway.handleNewMessage({targetSocket: findFriend.socket, message: {type: 'openChat', user: body.email, text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+            for (let socket of findFriend.socket) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'openChat', user: body.email, text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+            }
         }
     }
 
