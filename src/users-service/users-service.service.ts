@@ -26,6 +26,7 @@ import * as archiver from 'archiver';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PhotoHigh, PhotoHighDocument } from 'src/PhotoHighSchema';
 import { Ava, AvaDocument } from 'src/AvaSchema';
+import EncryptMess from 'src/MessEncryptInterface';
 
 @Injectable()
 export class UsersServiceService {
@@ -453,10 +454,9 @@ export class UsersServiceService {
                             return message
                         } else {
                             if (process.env.ENCRYPTION_KEY) {
-                                const resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
                                 return {
                                     ...message,
-                                    text: resultText,
+                                    text: message.text,
                                 }
                             }
                         }
@@ -469,17 +469,18 @@ export class UsersServiceService {
 
     async getMess(body: EmailAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email}).lean()
-        if (findUser) {
+        const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findUser && findFriend) {
             if (findUser.messages) {
                 let findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
                 if (findChat) {
                     const resultMessages = findChat?.messages.map(el => {
-                        let resultText: string = ''
+                        let resultText: any = ''
                         if (process.env.ENCRYPTION_KEY && el.text !== '') {
-                            if (el.typeMess === 'video') {
+                            if (el.typeMess === 'video' && typeof el.text === 'string') {
                                 resultText = el.text
                             } else {
-                                resultText = CryptoJS.AES.decrypt(el.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                                resultText = el.text
                             }
                         } else {
                             resultText = ''
@@ -499,9 +500,9 @@ export class UsersServiceService {
                         const resultMessages = await Promise.all(findChat.messages.map(async message => {
                             if (message.photos.length !== 0) {
                                 if (message.typeMess === 'text') {
-                                    let resultText: string = ''
+                                    let resultText: any = ''
                                     if (process.env.ENCRYPTION_KEY) {
-                                        resultText = CryptoJS.AES.decrypt(message.text, process.env.ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8)
+                                        resultText = message.text
                                     }
                                     return {
                                         ...message,
@@ -523,7 +524,7 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string}) {
+    async newMess(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string, myText?: EncryptMess[]}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
@@ -577,7 +578,7 @@ export class UsersServiceService {
                 }
             }
         }
-        if (resultData.type === 'video') {
+        if (resultData.type === 'video' && typeof resultData.text === 'string') {
             if (resultData.per === '') {
                 if (resultData.videoId) {
                     await this.saveVideoFile(resultData.files[0].buffer, resultData.text, resultData.videoId)
@@ -586,10 +587,6 @@ export class UsersServiceService {
                 const getThisVideo = await this.getVideo(resultData.text)
                 await this.saveVideoFile(getThisVideo.buffer, getThisVideo.filename, videoId)
             }
-        }
-        let resultEncryptedText: string = ''
-        if (process.env.ENCRYPTION_KEY) {
-            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
         }
         const findThisChat = findFriend?.messages.find(el => el.user === resultData.email)
         if (findThisChat) {
@@ -600,7 +597,7 @@ export class UsersServiceService {
                     if (resultData.type !== 'video') {
                         return {
                             ...el,
-                            messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                            messages: [...el.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                             messCount: el.messCount + 1,
                         }
                     } else {
@@ -643,7 +640,7 @@ export class UsersServiceService {
                 const year = date.getFullYear().toString().slice(-2);
                 const formattedDate = `${day}.${month}.${year}`
                 const id = date.getTime().toString()
-                const newFriendChats = [...findFriend.messages, {user: resultData.email, messages: [{user: resultData.email, text: resultEncryptedText, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
+                const newFriendChats = [...findFriend.messages, {user: resultData.email, messages: [{user: resultData.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
                 await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendChats}, {new: true})
             }
         }
@@ -654,7 +651,7 @@ export class UsersServiceService {
                 if (resultData.type !== 'video') {
                     return {
                         ...el,
-                        messages: [...el.messages, {user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                        messages: [...el.messages, {user: resultData.user, text: resultData.myText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                     }
                 } else {
                     if (resultData.videoId) {   
@@ -697,7 +694,7 @@ export class UsersServiceService {
         }
     }
 
-    async newChat(resultData: {user: string, text: string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[], videoId?: string}) {
+    async newChat(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[], videoId?: string, myText?: EncryptMess[]}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
@@ -751,7 +748,7 @@ export class UsersServiceService {
                 }
             }
         }
-        if (resultData.type === 'video') {
+        if (resultData.type === 'video' && typeof resultData.text === 'string') {
             if (resultData.per === '') {
                 if (resultData.videoId) {
                     await this.saveVideoFile(resultData.files[0].buffer, resultData.text, resultData.videoId)
@@ -761,16 +758,12 @@ export class UsersServiceService {
                 await this.saveVideoFile(getThisVideo.buffer, getThisVideo.filename, videoId)
             }
         }
-        let resultEncryptedText: string = ''
-        if (process.env.ENCRYPTION_KEY) {
-            resultEncryptedText = CryptoJS.AES.encrypt(resultData.text, process.env.ENCRYPTION_KEY).toString()
-        }
         let newFriendMess: any = []
         let newMessForMe: any = []
         if (findFriend && findMe) {
             if (resultData.type !== 'video') {
-                newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
-                newMessForMe = [{user: resultData.trueParamEmail, messages: [{user: resultData.user, text: resultEncryptedText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 0, pin: false, notifs: true}, ...findMe.messages]
+                newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
+                newMessForMe = [{user: resultData.trueParamEmail, messages: [{user: resultData.user, text: resultData.myText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 0, pin: false, notifs: true}, ...findMe.messages]
             } else {
                 if (resultData.videoId) {
                     newFriendMess = [{user: resultData.email, messages: [{user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}], messCount: 1, pin: false, notifs: true}, ...findFriend.messages]
@@ -869,7 +862,7 @@ export class UsersServiceService {
            if (el.user === body.trueParamEmail) {
                 const newMessForMe = el.messages.map(el => {
                     if (body.messId.includes(el.id)) {
-                        if (el.typeMess === 'video') {
+                        if (el.typeMess === 'video' && typeof el.text === 'string') {
                             deleteVideoId = [...deleteVideoId, el.text]
                         }
                         if (el.typeMess === 'text' && el.photos.length !== 0) {
@@ -1215,6 +1208,7 @@ export class UsersServiceService {
                             peerId: '',
                             botMess: [],
                             onlineStatus: 'Online',
+                            publicKeys: [body.publicKey]
                         })
                         await myUser.save()
                         await this.codeModel.findOneAndDelete({email: body.login})
@@ -1545,6 +1539,38 @@ export class UsersServiceService {
     async newName(body: {email: string, name: string}) {
         await this.userModel.findOneAndUpdate({email: body.email}, {name: body.name}, {new: true})
         return 'OK'
+    }
+
+    async getPublicKeys(body: {email: string, trueParamEmail: string}) {
+        const findMe = await this.userModel.findOne({email: body.email})
+        const findUser = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findMe && findUser) {
+            return {
+                myPublicKeys: findMe.publicKeys,
+                userPublicKeys: findUser.publicKeys,
+            }
+        }
+    }
+
+    async addPublicKey(body: {email: string, publicKey: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const newPublicKeys = [...findUser.publicKeys, body.publicKey]
+            await this.userModel.findOneAndUpdate({email: body.email}, {publicKeys: newPublicKeys}, {new: true})
+            return 'OK'
+        }
+    }
+
+    async messLength(body: {email: string, trueParamEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
+            if (findChat) {
+                return findChat.messages.length
+            } else {
+                return 0
+            }
+        }
     }
 
 }

@@ -12,6 +12,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 import { messIdAndTrueParamEmail } from 'src/messIdInter';
+import EncryptMess from 'src/MessEncryptInterface';
 
 @Controller('users-controller')export class UsersControllerController {
 
@@ -216,16 +217,16 @@ import { messIdAndTrueParamEmail } from 'src/messIdInter';
     @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email}
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string}, @Request() req) {
+        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
         return this.UsersService.newMess(resultData)
     }
     
     @Patch('new/chat')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email}
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string}, @Request() req) {
+        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
         return this.UsersService.newChat(resultData)
     }
 
@@ -547,6 +548,27 @@ import { messIdAndTrueParamEmail } from 'src/messIdInter';
         if (archive) {
             archive.pipe(res)
         }
+    }
+
+    @Get('public/keys/:email')
+    @UseGuards(CookieJwtGuard)
+    getPublicKeys(@Param('email') email: string, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: email}
+        return this.UsersService.getPublicKeys(body)
+    }
+
+    @Patch('add/public/key')
+    @UseGuards(CookieJwtGuard)
+    addPublicKey(@Body() data: {publicKey: string}, @Request() req) {
+        const body = {email: req.user.email, publicKey: data.publicKey}
+        return this.UsersService.addPublicKey(body)
+    }
+
+    @Post('mess/length')
+    @UseGuards(CookieJwtGuard)
+    getMessLength(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.messLength(body)
     }
 
 

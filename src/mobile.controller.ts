@@ -52,12 +52,6 @@ export class MobileControllerController {
     this.UsersService.closeUser(email)
   }
 
-  @Post('get/chats')
-  async getUserrChats(@Body() body: {token: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService)
-    return this.UsersService.getChats(email)
-  }
-
   @Patch('add/socket')
   async addSocket(@Body() data: {socketId: string, token: string}) {
     console.log('Data: ')
@@ -88,18 +82,18 @@ export class MobileControllerController {
     this.UsersService.zeroMess(body)
   }
 
-  @Patch('delete/mess')
-  async deleteMess(@Body() data: {trueParamEmail: string, messId: string[], token: string, unreadCount: number}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
-    return this.UsersService.deleteMess(body)
-  }
+  // @Patch('delete/mess')
+  // async deleteMess(@Body() data: {trueParamEmail: string, messId: string[], token: string, unreadCount: number}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
+  //   return this.UsersService.deleteMess(body)
+  // }
 
   @Patch('new/mess')  
   @UseInterceptors(FilesInterceptor('photo'))
-  async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, token: string}) {
+  async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, token: string, myText: string}) {
     const email = await getEmailFromToken(body.token, this.jwtService)  
-    const resultData = {...body, files: files, email: email}
+    const resultData = {...body, files: files, email: email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
     return this.UsersService.newMess(resultData)
   }
 
@@ -228,6 +222,13 @@ export class MobileControllerController {
     const email = await getEmailFromToken(data.token, this.jwtService) 
     const body = {email: email, inputPrompt: data.inputPrompt}
     return this.openAIService.userPrompt(body)
+  }
+
+  @Patch('add/public/key')
+  async addPublicKey(@Body() data: {publicKey: string, token: string}) {
+    const email = await getEmailFromToken(data.token, this.jwtService)
+    const body = {email: email, publicKey: data.publicKey}
+    return this.UsersService.addPublicKey(body)
   }
 
   

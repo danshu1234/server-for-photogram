@@ -24,5 +24,7 @@ export class CreateUser {
     @IsString()
     code: string;
 
+    publicKey: string;
+
     mobile?: string;
 }
