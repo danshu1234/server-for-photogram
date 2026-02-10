@@ -6,6 +6,7 @@ import { User, UserSchema } from './UserSchema'
 import { MongooseModule } from '@nestjs/mongoose'
 import { UsersModule } from './user.module'
 import { PhotoHigh } from './PhotoHighSchema'
+import { SocketModule } from './getaway.module'
 
 @Module({
   providers: [PhotosService],
@@ -15,6 +16,7 @@ import { PhotoHigh } from './PhotoHighSchema'
       { name: Photo.name, schema: PhotoSchema }, 
       { name: User.name, schema: UserSchema },   
     ]),
+    SocketModule,
     UsersModule,
   ],
 })

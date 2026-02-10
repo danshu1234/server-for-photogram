@@ -422,12 +422,14 @@ import EncryptMess from 'src/MessEncryptInterface';
         async googleAuthRedirect(@Request() req, @Res() res: Response) {
         const token = req.user.token
         const refreshToken = req.user.refreshToken
+        const regStatus = req.user.reg
+        const userEmail = req.user.email
         res.cookie('accessToken', token, {
             httpOnly: true,
             sameSite: 'strict',
             maxAge: 60 * 60 * 1000, 
         });
-        res.redirect(`http://localhost:3000/auth/${refreshToken}`);
+        res.redirect(`http://localhost:3000/auth/${refreshToken}/${regStatus}/${userEmail}`);
     }
 
     @Patch('get/new/token')

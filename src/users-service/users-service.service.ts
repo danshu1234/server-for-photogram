@@ -27,13 +27,14 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PhotoHigh, PhotoHighDocument } from 'src/PhotoHighSchema';
 import { Ava, AvaDocument } from 'src/AvaSchema';
 import EncryptMess from 'src/MessEncryptInterface';
+import { PlanMess, PlanMessDocument } from 'src/PlanMessSchema';
 
 @Injectable()
 export class UsersServiceService {
 
     private bucket: GridFSBucket;
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>) {}
     
     onModuleInit() {
         if (!this.connection.db) {
@@ -56,6 +57,51 @@ export class UsersServiceService {
         const inactiveSockets = allUsers.filter(el => !allActiveSockets.includes(el.socket)).map(el => el.socket)
         for (let inactiveSocket of inactiveSockets) {
             await this.userModel.findOneAndUpdate({socket: inactiveSocket}, {onlineStatus: result})
+        }
+    }
+
+    @Cron(CronExpression.EVERY_MINUTE)
+    async checkPlanMess() {
+        const allPlanMess = await this.PlanMessModel.find().lean()
+        for (let planMessage of allPlanMess) {
+            const date = new Date()
+            const nowTime = date.getTime()
+            if (nowTime >= planMessage.time) {
+                const findMe = await this.userModel.findOne({email: planMessage.sender})
+                if (findMe) {
+                    const newMyChats = findMe.messages.map(chat => {
+                        if (chat.user === planMessage.targetUser) {
+                            return {
+                                ...chat,
+                                messages: [...chat.messages, planMessage.messageForSender]
+                            }
+                        } else {
+                            return chat
+                        }
+                    })
+                    await this.userModel.findOneAndUpdate({email: planMessage.sender}, {messages: newMyChats}, {new: true})
+                }
+                const findUser = await this.userModel.findOne({email: planMessage.targetUser})
+                if (findUser) {
+                    const newUserChats = findUser.messages.map(chat => {
+                        if (chat.user === planMessage.sender) {
+                            return {
+                                ...chat,
+                                messages: [...chat.messages, planMessage.messageForTargetUser],
+                                messCount: chat.messCount + 1,
+                            }
+                        } else {
+                            return chat
+                        }
+                    })
+                    await this.userModel.findOneAndUpdate({email: planMessage.targetUser}, {messages: newUserChats}, {new: true})
+                    const userSockets = findUser.socket
+                    for (let socket of userSockets) {
+                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: planMessage.messageForTargetUser.text, photos: planMessage.messageForTargetUser.photos, id: planMessage.messageForTargetUser.id, ans: planMessage.messageForTargetUser.ans, socketId: '', typeMess: planMessage.messageForTargetUser.typeMess, per: planMessage.messageForTargetUser.per, pin: false}})
+                    }
+                    await this.PlanMessModel.findOneAndDelete({id: planMessage.id})
+                }
+            }
         }
     }
 
@@ -536,7 +582,7 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string, myText?: EncryptMess[]}) {
+    async newMess(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string, myText?: EncryptMess[], dateSend?: string, hour?: string, minute?: string}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
@@ -562,6 +608,9 @@ export class UsersServiceService {
                             })
                         )
                         resultFiles = resultPhotoFiles
+                    } else if (findMess.typeMess === 'video' && typeof findMess.text ==='string') {
+                       const resultVideo = await this.getVideo(findMess.text) 
+                       await this.saveVideoFile(resultVideo.buffer, resultVideo.filename, videoId)
                     }
                 }
             }
@@ -590,7 +639,7 @@ export class UsersServiceService {
                 }
             }
         }
-        if (resultData.type === 'video' && typeof resultData.text === 'string') {
+        if (resultData.type === 'video' && typeof resultData.text === 'string' && resultData.per === '') {
             if (resultData.per === '') {
                 if (resultData.videoId) {
                     await this.saveVideoFile(resultData.files[0].buffer, resultData.text, resultData.videoId)
@@ -601,26 +650,31 @@ export class UsersServiceService {
             }
         }
         const findThisChat = findFriend?.messages.find(el => el.user === resultData.email)
+        let resultMyMessage: any = ''
+        let resultUserMessage: any = ''
         if (findThisChat) {
             const newMessages = findFriend?.messages.map(el => {
                 if (el.user !== findMe?.email) {
                     return el
                 } else {
                     if (resultData.type !== 'video') {
+                        resultUserMessage = {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                         return {
                             ...el,
                             messages: [...el.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                             messCount: el.messCount + 1,
                         }
                     } else {
-                        if (resultData.videoId) {
+                        if (resultData.videoId && resultData.per === '') {
                             if (resultData.email !== resultData.trueParamEmail) {
+                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
                                     messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                     messCount: el.messCount + 1,
                                 }
                             } else {
+                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
                                     messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
@@ -628,12 +682,14 @@ export class UsersServiceService {
                             }
                         } else {
                             if (resultData.email !== resultData.trueParamEmail) {
+                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
                                 return {
                                     ...el,
                                     messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                     messCount: el.messCount + 1,
                                 }
                             } else {
+                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
                                     messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
@@ -643,7 +699,52 @@ export class UsersServiceService {
                     }
                 }
             })
-            await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
+            const newMessagesForMe = findMe?.messages.map(el => {
+                if (el.user !== resultData.trueParamEmail) {
+                    return el
+                } else {
+                    if (resultData.type !== 'video') {
+                        resultMyMessage = {user: resultData.user, text: resultData.myText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                        return {
+                            ...el,
+                            messages: [...el.messages, {user: resultData.user, text: resultData.myText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                        }
+                    } else {
+                        if (resultData.videoId) {  
+                            resultMyMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
+                            return {
+                                ...el,
+                                messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                            }
+                        } else {
+                            resultMyMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                            return {
+                                ...el,
+                                messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                            }
+                        }
+                    }
+                }
+            })
+            if (resultData.email !== resultData.trueParamEmail) {
+                if (!resultData.dateSend && !resultData.hour && !resultData.minute) {
+                    await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessagesForMe}, {new: true})
+                }
+            }
+            if (!resultData.dateSend && !resultData.hour && !resultData.minute) {
+                await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newMessages}, {new: true})
+            } else if (resultData.dateSend && resultData.hour && resultData.minute) {
+                console.log(`Ans: ${resultData.ans}`)
+                const date = new Date()
+                const id = date.getTime().toString()
+                const [year, month, day] = resultData.dateSend.split('-').map(Number)
+                const hours = parseInt(resultData.hour, 10)
+                const minutes = parseInt(resultData.minute, 10)
+                const planDate = new Date(year, month - 1, day, hours, minutes);
+                const milliseconds = planDate.getTime()
+                const planMessage = new this.PlanMessModel({id: id, messageForSender: resultMyMessage, messageForTargetUser: resultUserMessage, sender: resultData.email, targetUser: resultData.trueParamEmail, time: milliseconds})
+                await planMessage.save()
+            }
         } else {
             if (findFriend) {
                 const date = new Date(); 
@@ -656,39 +757,12 @@ export class UsersServiceService {
                 await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendChats}, {new: true})
             }
         }
-        const newMessagesForMe = findMe?.messages.map(el => {
-            if (el.user !== resultData.trueParamEmail) {
-                return el
-            } else {
-                if (resultData.type !== 'video') {
-                    return {
-                        ...el,
-                        messages: [...el.messages, {user: resultData.user, text: resultData.myText, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                    }
-                } else {
-                    if (resultData.videoId) {   
-                        return {
-                            ...el,
-                            messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                        }
-                    } else {
-                        return {
-                            ...el,
-                            messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
-                        }
-                    }
-                }
-            }
-        })
-        if (resultData.email !== resultData.trueParamEmail) {
-            await this.userModel.findOneAndUpdate({email: resultData.email}, {messages: newMessagesForMe}, {new: true})
-        }
         let resultPhotos: any = []
         if (resultData.type === 'text') {
             resultPhotos = resultFiles
         } 
         if (findFriend?.socket) {
-            if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
+            if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail && !resultData.dateSend && !resultData.hour && !resultData.minute) {
                 if (resultData.type === 'video') {
                     if (resultData.videoId) {
                         for (let socket of findFriend.socket) {
@@ -1408,9 +1482,20 @@ export class UsersServiceService {
         const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: userEmail, timeStamp: time})
         await newRefreshToken.save()
         const token = this.jwtService.sign({email: userEmail})
-        return {
-            token: token,
-            refreshToken: refreshToken,
+        if (!findUser) {
+            return {
+                token: token,
+                refreshToken: refreshToken,
+                reg: true,
+                email: userEmail,
+            }
+        } else {
+            return {
+                token: token,
+                refreshToken: refreshToken,
+                reg: false,
+                email: userEmail,
+            }  
         }
     }
 

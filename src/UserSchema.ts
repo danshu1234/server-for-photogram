@@ -63,7 +63,7 @@ export class Message {
   @Prop({ required: true })
   id: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   ans: string;
 
   @Prop({ required: false })

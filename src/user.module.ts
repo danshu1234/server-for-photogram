@@ -15,6 +15,7 @@ import { Video, VideoSchema } from './VideoSchema';
 import { MobileControllerController } from './mobile.controller';
 import { PhotoHigh, PhotoHighSchema } from './PhotoHighSchema';
 import { Ava, AvaSchema } from './AvaSchema';
+import { PlanMess, PlanMessSchema } from './PlanMessSchema';
 
 @Module({
     providers: [UsersServiceService, GoogleStrategy],
@@ -32,6 +33,7 @@ import { Ava, AvaSchema } from './AvaSchema';
             {name: Video.name, schema: VideoSchema},
             {name: PhotoHigh.name, schema: PhotoHighSchema},
             {name: Ava.name, schema: AvaSchema},
+            {name: PlanMess.name, schema: PlanMessSchema},
         ]), 
         SocketModule,
         PassportModule,

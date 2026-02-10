@@ -6,6 +6,7 @@ import { User, UserDocument } from 'src/UserSchema';
 import { PhotoDto } from './PhotoDto';
 import * as sharp from 'sharp';
 import { JwtService } from '@nestjs/jwt';
+import { SocketGateway } from 'src/socket-getaway';
 
 interface Comment{
     user: string,
@@ -15,7 +16,7 @@ interface Comment{
 @Injectable()
 export class PhotosService {
 
-    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, private jwtService: JwtService) {}
+    constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, private jwtService: JwtService, private readonly socketGateway: SocketGateway) {}
 
     async createPhoto(photo: {file: Express.Multer.File, data: {id: string, date: string, email: string}}) {
         let resultEmail: string = photo.data.email
