@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { AnimationFrameScheduler } from 'rxjs/internal/scheduler/AnimationFrameScheduler';
+import { KeyWord } from './PhotoSchema';
 
 export type UserDocument = User & Document;
 
@@ -14,6 +15,15 @@ export class EncryptMess {
 
   @Prop({ required: true })
   encPublicKey: string;
+}
+
+@Schema({ _id: false })
+export class OnlineStatus {
+  @Prop({ required: false })
+  status: string;
+
+  @Prop({ required: true })
+  plat: string;
 }
 
 @Schema()
@@ -32,6 +42,12 @@ export class BotMess {
 
   @Prop({ required: false })
   text: string;
+}
+
+@Schema()
+export class Preview {
+  @Prop({ required: true })
+  id: string;
 }
 
 @Schema()
@@ -55,7 +71,7 @@ export class Message {
   text: EncryptMess[] | string;
 
   @Prop({ required: AnimationFrameScheduler })
-  photos: PhotoMess[] | Buffer[];
+  photos: PhotoMess[] | Buffer[] | Preview[];
 
   @Prop({ required: true })
   date: string;
@@ -158,10 +174,19 @@ export class User {
   botMess: BotMess[];
 
   @Prop({ required: true })
-  onlineStatus: string;
+  onlineStatus: OnlineStatus;
 
   @Prop({ required: true })
   publicKeys: string[];
+
+  @Prop({ required: true })
+  versionToken: number;  
+
+  @Prop({ required: false })
+  userNotifs: string[];
+  
+  @Prop({ required: false })
+  keyWords: KeyWord[];
 }
 
 

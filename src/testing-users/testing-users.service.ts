@@ -16,11 +16,15 @@ import * as archiver from 'archiver';
 import { GridFSBucket } from 'mongodb';
 import { Readable } from 'stream';
 import Message from './MessInterface';
+import { ImageAnnotatorClient } from '@google-cloud/vision';
+import { ConfigService } from '@nestjs/config';
+import { HfInference } from '@huggingface/inference';
 
 @Injectable()
 export class TestingUsersService {
 
     private bucket: GridFSBucket;
+    private hf: HfInference;
 
     constructor(
         @InjectRepository(User) private usersRepository: Repository<User>,
@@ -32,6 +36,8 @@ export class TestingUsersService {
         private jwtService: JwtService,
 
         private readonly socketGateway: SocketGateway,
+
+        private configService: ConfigService,
         
 
     ) {}
@@ -44,52 +50,46 @@ export class TestingUsersService {
         this.bucket = new GridFSBucket(this.connection.db, {
             bucketName: 'photoss',
         });
+
+        const token = this.configService.get('HF_TOKEN');
+        if (!token) {
+            throw new Error('HF_TOKEN not found in .env');
+        }
+        this.hf = new HfInference(token);
     }
     
 
-    async createUser(body: {publicKey: string, name: string}) {
-        const user = new this.userModel({name: body.name, messages: [], messKey: body.publicKey})
+    async createUser() {
+        const name = 'Danya'
+        const lastName = 'Shundeev'
+        const email = 'danya.shundeev@internet.ru'
+        const phone = '89026150139'
+        const birthday = '20.01.20007'
+        const user = new this.userModel({firstName: name, lastName: lastName, email: email, phone: phone, birthDate: birthday})
         await user.save()
         return 'OK'
     }
 
-    async newMess(body: {resultMess: Message[]}) {
-        const name = 'Danya'
-        const findUser = await this.userModel.findOne({name: name})
-        if (findUser) {
-            const resultMessages = [...findUser.messages, body.resultMess]
-            await this.userModel.findOneAndUpdate({name: name}, {messages: resultMessages}, {new: true})
-        }
+    async getUser() {
+        const users = await this.userModel.find()
+        return users
     }
 
-    async getPublicKey() {
-        const name: string = 'Danya'
-        const findUser = await this.userModel.findOne({name: name})
-        if (findUser) {
-            return findUser.messKey
-        }
-    }
+    async explorePhoto(file: Express.Multer.File) {
+        const buffer = await sharp(file.buffer)
+            .resize(224, 224) 
+            .toBuffer()
+        
+        const uint8Array = new Uint8Array(buffer);
+        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+        
+        const result = await this.hf.imageClassification({
+            model: 'microsoft/resnet-50',
+            data: blob,
+        });
 
-    async getAllMess() {
-        const name: string = 'Danya'
-        const findUser = await this.userModel.findOne({name: name})
-        if (findUser) {
-            return findUser.messages
-        }
-    }
-
-    async addKey(body: {publicKey: string}) {
-        const name: string = 'Danya'
-        const findUser = await this.userModel.findOne({name: name})
-        if (findUser) {
-            if (typeof findUser.messKey === 'string') {
-                const newPublicKeys = [body.publicKey]
-                await this.userModel.findOneAndUpdate({name: name}, {messKey: newPublicKeys}, {new: true})
-            } else {
-                const newPublicKeys = [...findUser.messKey, body.publicKey]
-                await this.userModel.findOneAndUpdate({name: name}, {messKey: newPublicKeys}, {new: true})
-            }
-        }
+        const resultWords = result.slice(0, 5)
+        console.log(resultWords)
     }
 
 

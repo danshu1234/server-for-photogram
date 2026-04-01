@@ -13,8 +13,8 @@ export class PhotosController {
     @Post('create')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FileInterceptor('photo'))
-    createNewPhoto(@UploadedFile() file: Express.Multer.File, @Body() data: {id: string, date: string}, @Request() req) {
-        const body = {id: data.id, date: data.date, email: req.user.email}
+    createNewPhoto(@UploadedFile() file: Express.Multer.File, @Body() data: {id: string, date: string, userPostNotifs: string}, @Request() req) {
+        const body = {id: data.id, date: data.date, userPostNotifs: JSON.parse(data.userPostNotifs), email: req.user.email}
         const photo = {
             file: file,
             data: body,
@@ -33,18 +33,20 @@ export class PhotosController {
     @UseGuards(CookieJwtGuard)
     likeThisPhoto(@Body() data: {id: string}, @Request() req) {
         const body = {email: req.user.email, id: data.id}
-        this.PhotosService.likePhoto(body)
+        return this.PhotosService.likePhoto(body)
     }
 
     @Patch('unlike/photo')
     @UseGuards(CookieJwtGuard)
     unlikeThisPhoto(@Body() data: {id: string}, @Request() req) {
         const body = {email: req.user.email, id: data.id}
-        this.PhotosService.unlikePhoto(body)
+        return this.PhotosService.unlikePhoto(body)
     }
 
     @Post('all')
-    getAllPhotos(@Body() body: {start: number, finish: number}) {
+    @UseGuards(CookieJwtGuard)
+    getAllPhotos(@Body() data: {start: number, finish: number}, @Request() req) {
+        const body = {email: req.user.email, start: data.start, finish: data.finish}
         return this.PhotosService.getAll(body)
     }
 

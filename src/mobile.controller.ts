@@ -5,6 +5,7 @@ import getEmailFromToken from './MobileJwtGuard';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { OpenAIService } from './openai.service';
+import { messIdAndTrueParamEmail } from './messIdInter';
 
 @Controller('mobile')
 export class MobileControllerController {
@@ -41,9 +42,10 @@ export class MobileControllerController {
   } 
 
   @Patch('online/status')
-  async onlineStatus(@Body() body: {userToken: string}) {
-    const email = await getEmailFromToken(body.userToken, this.jwtService)
-    this.UsersService.onlineStatus(email)
+  async onlineStatus(@Body() data: {userToken: string, plat: string}) {
+    const email = await getEmailFromToken(data.userToken, this.jwtService)
+    const body = {email: email, plat: data.plat}
+    this.UsersService.onlineStatus(body)
   }
 
   @Patch('user/close')
@@ -236,6 +238,29 @@ export class MobileControllerController {
     const email = await getEmailFromToken(data.token, this.jwtService)
     const body = {email: email, trueParamEmail: userEmail}
     return this.UsersService.getPublicKeys(body)
+  }
+
+  @Post('get/file')
+  async getFile(@Body() data: {trueParamEmail: string, messId: string, token: string}, @Request() req, @Res() res) {
+    const email = await getEmailFromToken(data.token, this.jwtService)
+      const body = {...data, email: email}
+      const file = await this.UsersService.getFile(body)
+      res.set({
+          'Content-Type': file?.type,
+          'Content-Length': file?.file.length,
+          'Content-Disposition': 'attachment; filename="file"',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+      });
+      res.send(file?.file)
+  }
+
+  @Post('give/token')
+  async giveToken(@Body() data: {token: string, userSocket: string}) {
+    const email = await getEmailFromToken(data.token, this.jwtService)
+    const body = {email: email, userSocket: data.userSocket}
+    return this.UsersService.giveToken(body)
   }
 
   

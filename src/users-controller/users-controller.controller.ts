@@ -217,8 +217,13 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string, previewVideo?: string}, @Request() req) {
+        let resultData: any = ''
+        if (body.type !== 'video') {
+            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
+        } else {
+            resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo}
+        }
         return this.UsersService.newMess(resultData)
     }
     
@@ -255,18 +260,11 @@ import EncryptMess from 'src/MessEncryptInterface';
         return this.UsersService.getBanMess(req.user.email)
     }
 
-    @Patch('ban/user')
+    @Patch('ban/unban/user')
     @UseGuards(CookieJwtGuard)
-    banUser(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
+    banUser(@Body() data: {trueParamEmail: string, banStatus: boolean}, @Request() req) {
+        const body = {trueParamEmail: data.trueParamEmail, banStatus: data.banStatus, email: req.user.email}
         this.UsersService.banUser(body)
-    }
-
-    @Patch('unban/user')
-    @UseGuards(CookieJwtGuard)
-    unbanUser(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        this.UsersService.unbanUser(body)
     }
 
     @Patch('delete/mess')
@@ -481,8 +479,9 @@ import EncryptMess from 'src/MessEncryptInterface';
 
     @Patch('online/status')
     @UseGuards(CookieJwtGuard)
-    onlineStatus(@Request() req) {
-        this.UsersService.onlineStatus(req.user.email)
+    onlineStatus(@Body() data: {plat: string}, @Request() req) {
+        const body = {email: req.user.email, plat: data.plat}
+        this.UsersService.onlineStatus(body)
     }
 
     @Get('get/status/online/:trueParamEmail')
@@ -571,6 +570,88 @@ import EncryptMess from 'src/MessEncryptInterface';
     getMessLength(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.UsersService.messLength(body)
+    }
+
+    @Post('big/photo')
+    @UseGuards(CookieJwtGuard)
+    async getBigPhoto(@Body() data: {trueParamEmail: string, messId: string, photoId: string}, @Request() req, @Res() res: Response) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, photoId: data.photoId}
+        const resultBuffer = await this.UsersService.getBigPhoto(body)
+        res.setHeader('Content-Type', 'image/jpeg/png')
+        return res.send(resultBuffer)
+    }
+
+    @Get('get/token')
+    async getToken(@Request() req) {
+        const token = req.cookies?.accessToken
+        return token
+    }
+
+    @Get('change/token')
+    @UseGuards(CookieJwtGuard)
+    async changeToken(@Request() req, @Res({ passthrough: true }) response: Response) {
+        const email = req.user.email
+        return this.UsersService.changeToken(email, response)
+    }
+
+    @Get('add/test/users')
+    addTestUsers() {
+        this.UsersService.addTestUsers()
+    }
+
+    @Get('get/popular/users')
+    getPopularUsers() {
+        return this.UsersService.getPopularUsers()
+    }
+
+    @Post('save/token')
+    saveToken(@Body() body: {accessToken: string}, @Res() res: Response) {
+        res.cookie('accessToken', body.accessToken, {
+            httpOnly: true,
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 1000, 
+        });
+        return 'OK'
+    }
+
+    @Patch('new/user/notif')
+    @UseGuards(CookieJwtGuard)
+    postNotif(@Body() data: {trueParamEmail: string, type: boolean}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, type: data.type}
+        this.UsersService.postNotif(body)
+    }
+
+    @Get('user/get/notifs')
+    @UseGuards(CookieJwtGuard)
+    getPostNotifs(@Request() req) {
+        return this.UsersService.getPostNotifs(req.user.email)
+    }
+
+    @Post('enter/test')
+    enterTest(@Body() body: {login: string, password: string}) {
+        return this.UsersService.enterTest(body)
+    }
+
+    @Post('get/email/test')
+    getEmailTest(@Body() body: {sessId: string}) {
+        return this.UsersService.getEmailTest(body.sessId)
+    }
+
+    @Post('close/sess/test')
+    closeSess(@Body() body: {sessId: string}) {
+        this.UsersService.closeSess(body.sessId)
+    }
+
+    @Post('refresh/session')
+    refreshSession(@Body() body: {refreshToken: string}) {
+        return this.UsersService.refreshSession(body.refreshToken)
+    }
+
+    @Get('get/key/words')
+    @UseGuards(CookieJwtGuard)
+    getUserKeywords(@Request() req) {
+        const email = req.user.email
+        return this.UsersService.getUserKeywords(email)
     }
 
 

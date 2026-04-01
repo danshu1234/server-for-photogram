@@ -12,28 +12,19 @@ export class TestingUsersController {
 
 
     @Post('user/create')
-    createUser(@Body() body: {publicKey: string, name: string}) {
-        return this.TestingUsersService.createUser(body)
+    createUser() {
+        return this.TestingUsersService.createUser()
     }
 
-    @Patch('new/mess')
-    newMess(@Body() body: {resultMess: Message[]}) {
-        return this.TestingUsersService.newMess(body)
+    @Get('get/user')
+    getUser() {
+        return this.TestingUsersService.getUser()
     }
 
-    @Get('public/key')
-    getPublicKey() {
-        return this.TestingUsersService.getPublicKey()
-    }
-    
-    @Get('all/mess')
-    getAllMess() {
-        return this.TestingUsersService.getAllMess()
-    }
-
-    @Patch('add/key')
-    addKey(@Body() body: {publicKey: string}) {
-        this.TestingUsersService.addKey(body)
+    @Post('explore/photo')
+    @UseInterceptors(FileInterceptor('photo'))
+    createNewPhoto(@UploadedFile() file: Express.Multer.File) {
+        this.TestingUsersService.explorePhoto(file)
     }
 
 }   

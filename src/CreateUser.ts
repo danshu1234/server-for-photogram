@@ -26,5 +26,7 @@ export class CreateUser {
 
     publicKey: string;
 
+    plat: string;
+
     mobile?: string;
 }

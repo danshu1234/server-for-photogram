@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Injectable } from '@nestjs/common';
+import { BadRequestException, Body, Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from 'src/UserSchema';
@@ -28,13 +28,20 @@ import { PhotoHigh, PhotoHighDocument } from 'src/PhotoHighSchema';
 import { Ava, AvaDocument } from 'src/AvaSchema';
 import EncryptMess from 'src/MessEncryptInterface';
 import { PlanMess, PlanMessDocument } from 'src/PlanMessSchema';
+import { NewTestingUser, NewTestingUserDocument, NewTestingUserSchema } from 'src/NewTestingUserShema';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { REDIS_CLIENT } from '../redis.module'
+import Redis from 'ioredis';
+import { Photo, PhotoDocument } from 'src/PhotoSchema';
+import { PhotosService } from 'src/photos/photos.service';
 
 @Injectable()
 export class UsersServiceService {
 
     private bucket: GridFSBucket;
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>, @InjectModel(NewTestingUser.name) private readonly newTestingUserModel: Model<NewTestingUserDocument>, @InjectQueue('test-queue') private testQueue: Queue, @Inject(REDIS_CLIENT) private redis: Redis, @InjectModel(NewTestingUser.name) private readonly testUserModel: Model<NewTestingUserDocument>, @InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @Inject(forwardRef(() => PhotosService)) private readonly photoService: PhotosService,) {}
     
     onModuleInit() {
         if (!this.connection.db) {
@@ -56,7 +63,7 @@ export class UsersServiceService {
         const allUsers = await this.getAllUsers()
         const inactiveSockets = allUsers.filter(el => !allActiveSockets.includes(el.socket)).map(el => el.socket)
         for (let inactiveSocket of inactiveSockets) {
-            await this.userModel.findOneAndUpdate({socket: inactiveSocket}, {onlineStatus: result})
+            await this.userModel.findOneAndUpdate({socket: inactiveSocket}, {onlineStatus: {status: result, plat: ''}})
         }
     }
 
@@ -175,32 +182,101 @@ export class UsersServiceService {
     isBufferPhoto(photo: any): photo is { buffer: any } {
         return photo && typeof photo === 'object' && 'buffer' in photo;
     }
+
+    async generateTokens(email: string) {
+        const refreshToken = uuidv4()
+        const resultRefreshToken = await argon2.hash(refreshToken)
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            const token = this.jwtService.sign({email: email, version: findUser.versionToken})
+            const date = new Date()
+            const time = date.getTime()
+            const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: email, timeStamp: time})
+            await newRefreshToken.save()
+            return {
+                accessToken: token,
+                refreshToken: refreshToken,
+            }
+        } else {
+            return {
+                accesToken : '',
+                refreshToken: '',
+            }
+        }
+    }
+
+    async addUser(email: string, publicKeys: string[], name: string, plat: string, pass?: string) {
+        if (pass) {
+            const myUser = new this.userModel({
+                email: email,
+                password: pass,
+                name: name,    
+                subscribes: 0,
+                notifs: [],
+                socket: '',
+                visits: [],
+                reports: [],
+                avatar: '',
+                open: true,
+                permUsers: [],
+                messages: [],
+                permMess: 'Все',
+                birthday: '',
+                savePosts: [],
+                peerId: '',
+                botMess: [],
+                onlineStatus: {status: 'Online', plat: plat},
+                publicKeys: publicKeys,
+                versionToken: 1,
+                userNotifs: [],
+                keyWords: [],
+            })
+            await myUser.save()
+        } else {
+            const myUser = new this.userModel({
+                email: email,
+                name: name,    
+                subscribes: 0,
+                notifs: [],
+                socket: '',
+                visits: [],
+                reports: [],
+                avatar: '',
+                open: true,
+                permUsers: [],
+                messages: [],
+                permMess: 'Все',
+                birthday: '',
+                savePosts: [],
+                peerId: '',
+                botMess: [],
+                onlineStatus: {status: 'Online', plat: plat},
+                publicKeys: publicKeys,
+                versionToken: 1,
+            })
+            await myUser.save() 
+        }
+    }
     
     async enter(body: {login: string, password: string, mobile?: string}, response: any) {
         const findUser = await this.userModel.findOne({email: body.login.trim()})
         if (findUser && findUser.password) {
             const checkPass = await argon2.verify(findUser.password, body.password.trim())
             if (checkPass === true) {
-                const refreshToken = uuidv4()
-                const resultRefreshToken = await argon2.hash(refreshToken)
-                const token = this.jwtService.sign({email: findUser.email})
-                const date = new Date()
-                const time = date.getTime()
-                const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
-                await newRefreshToken.save()
+                const tokens = await this.generateTokens(body.login)
                 if (!body.mobile) {
-                        response.cookie('accessToken', token, {
+                    response.cookie('accessToken', tokens.accessToken, {
                         httpOnly: true,
                         sameSite: 'strict',
                         maxAge: 60 * 60 * 1000, 
                     });
                     return {
-                        refreshToken: refreshToken,
+                        refreshToken: tokens.refreshToken,
                     }
                 } else {
                     return {
-                        access: token,
-                        refreshToken: refreshToken,
+                        access: tokens.accessToken,
+                        refreshToken: tokens.refreshToken,
                     }
                 }
             } else {
@@ -315,10 +391,18 @@ export class UsersServiceService {
         let resultNotifs: any = []
         if (body.type === 'photo') {
             resultNotifs = [...currentNotifs, {type: 'photo', user: body.resultEmail, photoId: body.photoId}]
+        } else if (body.type === 'comment') {
+            resultNotifs = [...currentNotifs, {type: body.type, user: body.resultEmail, photoId: body.photoId}]
         } else {
             resultNotifs = [...currentNotifs, {type: body.type, user: body.resultEmail}]
-        } 
+        }
         await this.userModel.findOneAndUpdate({email: body.userEmail}, {notifs: resultNotifs}, {new: true})
+        const userSockets = findUser?.socket
+        if (userSockets) {
+            for (let socket of userSockets) {
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'notif', typeNotif: body.type, user: body.resultEmail}})
+            }
+        }
     }
 
     async clearNotifs(email: string) {
@@ -406,17 +490,25 @@ export class UsersServiceService {
     }
 
     async getAllUsers() {
-        const allUsers = await this.userModel.find({}, {messages: 0, password: 0}).lean()
-        let resultAllUsers: any[] = []
-        for (let user of allUsers) {
-            const userAvatar = await this.avaModel.findOne({email: user.email})
-            if (userAvatar) {
-                resultAllUsers = [...resultAllUsers, {...user, avatar: userAvatar.avatar}]
-            } else {
-                resultAllUsers = [...resultAllUsers, user]
-            }
-        }
-        return resultAllUsers
+        const resultUsers = await this.userModel.aggregate([
+            {$project: {messages: 0, password: 0, botMess: 0, _id: 0}},
+            {$lookup: {
+                from: 'avas',
+                localField: 'email',
+                foreignField: 'email',
+                as: 'resultAva',
+            }},
+            {$addFields: {
+                avatar: {
+                    $ifNull: [
+                        {$arrayElemAt: ['$resultAva.avatar', 0]},
+                        '',
+                    ]
+                }
+            }},
+            {$project: {resultAva: 0}},
+        ])
+        return resultUsers
     }
 
     async checkOpen(email: string) {
@@ -504,7 +596,7 @@ export class UsersServiceService {
     async getChats(email: string) {
         const findUser = await this.userModel.findOne({email: email})
         if (findUser) {
-            const resultChats = findUser.messages.map(chat => {
+            const userChats = findUser.messages.map(chat => {
                 return {
                     ...chat,
                     messages: chat.messages.map(message => {
@@ -521,6 +613,13 @@ export class UsersServiceService {
                     })
                 }
             })
+            let resultChats: any = []
+            for (let chat of userChats) {
+                const userChat = await this.userModel.findOne({email: chat.user})
+                if (userChat) {
+                    resultChats = [...resultChats, {...chat, onlineStatus: userChat.onlineStatus}]
+                }
+            }
             return resultChats
         }
     }
@@ -582,10 +681,11 @@ export class UsersServiceService {
         }
     }
 
-    async newMess(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string, myText?: EncryptMess[], dateSend?: string, hour?: string, minute?: string}) {
+    async newMess(resultData: {user: string, text: EncryptMess[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: any, videoId?: string, myText?: EncryptMess[], dateSend?: string, hour?: string, minute?: string, previewVideo?: string}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
+        let previewId: string = uuidv4()
         let resultFiles: any[] = []
         if (resultData.per !== '') {
             const findOrigChat = findMe?.messages.find(el => el.user === resultData.origUser)
@@ -593,24 +693,28 @@ export class UsersServiceService {
                 const findMess = findOrigChat.messages.find(el => el.id === resultData.origId)
                 if (findMess) {
                     if (findMess.typeMess !== 'video') {
-                        const resultPhotoFiles = await Promise.all(
-                            findMess.photos.map(async(el) => {
-                                const findHighPhoto = await this.photoHighModel.findOne({id: el.id})
-                                if (findHighPhoto) {
-                                    const photoHighId = uuidv4()
-                                    const photoHigh = new this.photoHighModel({photo: findHighPhoto.photo, id: photoHighId})
-                                    await photoHigh.save()
-                                    return {
-                                        base64: el.base64,
-                                        id: photoHighId,
+                        if (findMess.typeMess === 'text') {
+                            const resultPhotoFiles = await Promise.all(
+                                findMess.photos.map(async(el) => {
+                                    const findHighPhoto = await this.photoHighModel.findOne({id: el.id})
+                                    if (findHighPhoto) {
+                                        const photoHighId = uuidv4()
+                                        const photoHigh = new this.photoHighModel({photo: findHighPhoto.photo, id: photoHighId})
+                                        await photoHigh.save()
+                                        return {
+                                            base64: el.base64,
+                                            id: photoHighId,
+                                        }
                                     }
-                                }
-                            })
-                        )
-                        resultFiles = resultPhotoFiles
+                                })
+                            )
+                            resultFiles = resultPhotoFiles
+                        } else {
+                            resultFiles = findMess.photos
+                        }
                     } else if (findMess.typeMess === 'video' && typeof findMess.text ==='string') {
-                       const resultVideo = await this.getVideo(findMess.text) 
-                       await this.saveVideoFile(resultVideo.buffer, resultVideo.filename, videoId)
+                        const resultVideo = await this.getVideo(findMess.text) 
+                        await this.saveVideoFile(resultVideo.buffer, resultVideo.filename, videoId)
                     }
                 }
             }
@@ -667,32 +771,32 @@ export class UsersServiceService {
                     } else {
                         if (resultData.videoId && resultData.per === '') {
                             if (resultData.email !== resultData.trueParamEmail) {
-                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
-                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                     messCount: el.messCount + 1,
                                 }
                             } else {
-                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                                resultUserMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
-                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                 }
                             }
                         } else {
                             if (resultData.email !== resultData.trueParamEmail) {
-                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
+                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
                                 return {
                                     ...el,
-                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                     messCount: el.messCount + 1,
                                 }
                             } else {
-                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                                resultUserMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                                 return {
                                     ...el,
-                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                    messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                                 }                               
                             }
                         }
@@ -711,16 +815,16 @@ export class UsersServiceService {
                         }
                     } else {
                         if (resultData.videoId) {  
-                            resultMyMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
+                            resultMyMessage = {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false} 
                             return {
                                 ...el,
-                                messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                messages: [...el.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                             }
                         } else {
-                            resultMyMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
+                            resultMyMessage = {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}
                             return {
                                 ...el,
-                                messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
+                                messages: [...el.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}],
                             }
                         }
                     }
@@ -936,20 +1040,17 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: email})
         return findUser?.banMess
     }
+    
     async banUser(body: EmailAndTrueParamEmail) {
         const findUser = await this.userModel.findOne({email: body.email})
         const prevBanUsers = findUser?.banMess
         if (prevBanUsers && body.email !== body.trueParamEmail) {
-            await this.userModel.findOneAndUpdate({email: body.email}, {banMess: [...prevBanUsers, body.trueParamEmail]}, {new: true})
-        }
-    }
-
-    async unbanUser(body: EmailAndTrueParamEmail) {
-        const findUser = await this.userModel.findOne({email: body.email})
-        const prevBanUsers = findUser?.banMess
-        if (prevBanUsers) {
-            const filteredUsersBan = prevBanUsers.filter(el => el !== body.trueParamEmail)
-            await this.userModel.findOneAndUpdate({email: body.email}, {banMess: filteredUsersBan}, {new: true})
+            if (body.banStatus === true) {
+                await this.userModel.findOneAndUpdate({email: body.email}, {banMess: [...prevBanUsers, body.trueParamEmail]}, {new: true})
+            } else {
+                const filteredUsersBan = prevBanUsers.filter(el => el !== body.trueParamEmail)
+                await this.userModel.findOneAndUpdate({email: body.email}, {banMess: filteredUsersBan}, {new: true})
+            }
         }
     }
 
@@ -1297,50 +1398,22 @@ export class UsersServiceService {
                 if (findCode) {
                     if (body.code === findCode.code) {
                         const resultPass = await argon2.hash(body.firstPass)
-                        const myUser = new this.userModel({
-                            email: body.login,
-                            password: resultPass,
-                            name: body.name,
-                            subscribes: 0,
-                            notifs: [],
-                            socket: '',
-                            visits: [],
-                            reports: [],
-                            avatar: '',
-                            open: true,
-                            permUsers: [],
-                            messages: [],
-                            permMess: 'Все',
-                            birthday: '',
-                            savePosts: [],
-                            peerId: '',
-                            botMess: [],
-                            onlineStatus: 'Online',
-                            publicKeys: [body.publicKey]
-                        })
-                        await myUser.save()
+                        await this.addUser(body.login, [body.publicKey], body.name, body.plat, resultPass)
                         await this.codeModel.findOneAndDelete({email: body.login})
-                        const token = this.jwtService.sign({email: body.login})
-                        const refreshToken = uuidv4()
-                        const resultRefreshToken = await argon2.hash(refreshToken)
-                        const date = new Date()
-                        const time = date.getTime()
-                        await this.codeModel.findOneAndDelete({email: body.login, code: body.code})
-                        const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: body.login, timeStamp: time})
-                        await newRefreshToken.save()
+                        const tokens = await this.generateTokens(body.login)
                         if (!body.mobile) {
-                            response.cookie('accessToken', token, {
+                            response.cookie('accessToken', tokens.accessToken, {
                                 httpOnly: true,
                                 sameSite: 'strict',
                                 maxAge: 60 * 60 * 1000, 
                             });
                             return {
-                                refreshToken: refreshToken,
+                                refreshToken: tokens.refreshToken,
                             }
                         } else {
                             return {
-                                accessToken: token,
-                                refreshToken: resultRefreshToken,
+                                accessToken: tokens.accessToken,
+                                refreshToken: tokens.refreshToken,
                             }
                         }
                     } else {
@@ -1419,23 +1492,20 @@ export class UsersServiceService {
             const date = new Date()
             const nowTime = date.getTime()
             if (nowTime - resultRefreshToken.timeStamp < 86400000) {
-                const resultAccessToken = this.jwtService.sign({email: resultRefreshToken.email})
-                const refreshToken = uuidv4()
-                const resultToken = await argon2.hash(refreshToken)
-                await this.refreshTokensModel.findOneAndUpdate({token: resultRefreshToken.token}, {token: resultToken}, {new: true})
+                const tokens = await this.generateTokens(resultRefreshToken.email)
                 if (!body.token) {
-                        response.cookie('accessToken', resultAccessToken, {
+                        response.cookie('accessToken', tokens.accessToken, {
                         httpOnly: true,
                         sameSite: 'strict',
                         maxAge: 60 * 60 * 1000, 
                     });
                     return {
-                        refreshToken: refreshToken,
+                        refreshToken: tokens.refreshToken,
                     }
                 } else {
                     return {
-                        accessToken: resultAccessToken,
-                        refreshToken: refreshToken,
+                        accessToken: tokens.accessToken,
+                        refreshToken: tokens.refreshToken,
                     }
                 }
             } else {
@@ -1454,45 +1524,21 @@ export class UsersServiceService {
     async googleEnter(userEmail: string, name: string) {
         const findUser = await this.userModel.findOne({email: userEmail})
         if (!findUser) {
-            const myUser = new this.userModel({
-                email: userEmail,
-                name: name,    
-                subscribes: 0,
-                notifs: [],
-                socket: '',
-                visits: [],
-                reports: [],
-                avatar: '',
-                open: true,
-                permUsers: [],
-                messages: [],
-                permMess: 'Все',
-                birthday: '',
-                savePosts: [],
-                peerId: '',
-                botMess: [],
-                onlineStatus: 'Online',
-            })
-            await myUser.save()
+            const plat = 'desktop'
+            await this.addUser(userEmail, [], name, plat)
         }
-        const refreshToken = uuidv4()
-        const resultRefreshToken = await argon2.hash(refreshToken)
-        const date = new Date()
-        const time = date.getTime()
-        const newRefreshToken = new this.refreshTokensModel({token: resultRefreshToken, email: userEmail, timeStamp: time})
-        await newRefreshToken.save()
-        const token = this.jwtService.sign({email: userEmail})
+        const tokens = await this.generateTokens(userEmail)
         if (!findUser) {
             return {
-                token: token,
-                refreshToken: refreshToken,
+                token: tokens.accessToken,
+                refreshToken: tokens.refreshToken,
                 reg: true,
                 email: userEmail,
             }
         } else {
             return {
-                token: token,
-                refreshToken: refreshToken,
+                token: tokens.accessToken,
+                refreshToken: tokens.refreshToken,
                 reg: false,
                 email: userEmail,
             }  
@@ -1534,11 +1580,11 @@ export class UsersServiceService {
         const day = date.getDate()
         const month = String(date.getMonth() + 1).padStart(2, '0'); 
         const result = `${day}.${month}`;
-        await this.userModel.findOneAndUpdate({email: email}, {onlineStatus: result}, {new: true})
+        await this.userModel.findOneAndUpdate({email: email}, {onlineStatus: {status: result, plat: ''}}, {new: true})
     }
 
-    async onlineStatus(email: string) {
-        await this.userModel.findOneAndUpdate({email: email}, {onlineStatus: 'Online'}, {new: true})
+    async onlineStatus(body: {email: string, plat: string}) {
+        await this.userModel.findOneAndUpdate({email: body.email}, {onlineStatus: {status: 'Online', plat: body.plat}}, {new: true})
     }
 
     async getStatusOnline(trueParamEmail: string) {
@@ -1692,6 +1738,239 @@ export class UsersServiceService {
                 return findChat.messages.length
             } else {
                 return 0
+            }
+        }
+    }
+
+    async getBigPhoto(body: {email: string, trueParamEmail: string, messId: string, photoId: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            const findChat = findUser.messages.find(el => el.user === body.trueParamEmail)
+            if (findChat) {
+                const message = findChat.messages.find(el => el.id === body.messId)
+                if (message) {
+                    const photos = message.photos.map(el => {
+                        if (el.id) {
+                            return el
+                        } else {
+                            return false
+                        }
+                    }).filter(el => el !== false)
+                    const resultPhoto = photos.find(el => el.id === body.photoId)
+                    const findHighPhoto = await this.photoHighModel.findOne({id: resultPhoto.id})
+                    return findHighPhoto?.photo
+                }
+            }
+        }
+    }
+
+    async changeToken(email: string, response: any) {
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            await this.userModel.findOneAndUpdate({email: email}, {versionToken: findUser.versionToken + 1}, {new: true})
+            const tokens = await this.generateTokens(email)
+            response.cookie('accessToken', tokens.accessToken, {
+                httpOnly: true,
+                sameSite: 'strict',
+                maxAge: 60 * 60 * 1000, 
+            });
+            return 'OK'
+        }
+    }
+
+    async addTestUsers() {
+        const names: string[] = ['Danya', 'Alice', 'Dima', 'John', 'Bob', 'Mike', 'Margo']
+        const statuses: string[] = ['Online', 'Offline'] 
+        const types: string[] = ['like', 'sub', 'comment']
+        for (let name of names) {
+            let resultSubs: string[] = []
+            const randomNum = Math.floor(Math.random() * 10)
+            for (let i=0; i<randomNum; i++) {
+                resultSubs = [...resultSubs, i.toString()]
+            }
+            let resultNotifs: {name: string, type: string}[] = []
+            const randomStatus = statuses[Math.floor(Math.random() * 2)]
+            let sexUser: string = ''
+            if (name === 'Danya' || name === 'Dima' || name === 'John' || name === 'Bob' || name === 'Mike') {
+                sexUser = 'male'
+            } else {
+                sexUser = 'female'
+            }
+            for (let i=0; i<3; i++) {
+                const randomName = names[Math.floor(Math.random() * names.length)]
+                const randomType = types[Math.floor(Math.random() * 3)]
+                resultNotifs = [...resultNotifs, {name: randomName, type: randomType}]
+            }
+            const randomAge = Math.floor(Math.random() * 19)
+            const user = new this.newTestingUserModel({name: name, age: randomAge, subs: resultSubs, statusOnline: randomStatus, sex: sexUser, notifs: resultNotifs})
+            await user.save()
+        }
+    }
+
+    async getPopularUsers() {
+        const popularUsers = await this.newTestingUserModel.aggregate([
+            {$addFields: {
+                subs: {$slice: ['$subs', 1]},
+            }},
+        ])
+        return popularUsers
+    }
+
+    async giveToken(body: {email: string, userSocket: string}) {
+        const tokens = await this.generateTokens(body.email)
+        this.socketGateway.handleNewMessage({targetSocket: body.userSocket, message: {type: 'tokenQr', tokens: tokens}})
+    }
+
+    async postNotif(body: {email: string, trueParamEmail: string, type: boolean}) {
+        const findUser = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findUser) {
+            let newUserPostNotifs: string[] = []
+            if (body.type === true) {
+                newUserPostNotifs = [...findUser.userNotifs, body.email]
+            } else {
+                newUserPostNotifs = findUser.userNotifs.filter(el => el !== body.email)
+            }
+            await this.userModel.findOneAndUpdate({email: body.trueParamEmail}, {userNotifs: newUserPostNotifs}, {new: true})
+        }
+    }
+
+    async getPostNotifs(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            return findUser.userNotifs
+        }
+    }
+
+    async enterTest(body: {login: string, password: string}) {
+        const errEnter = 'ENTER_ERR'
+        const findUser = await this.userModel.findOne({email: body.login})
+        if (findUser) {
+            const checkPass = await argon2.verify(findUser.password, body.password.trim())
+            if (checkPass) {
+                const sessId = uuidv4()
+                const sessionData = {
+                    user: {
+                        email: findUser.email,
+                    },
+                    isAuthenticated: true,
+                };
+                await this.redis.setex(
+                    `sess:${sessId}`,
+                    60,
+                    JSON.stringify(sessionData),
+                )
+                const refreshToken = uuidv4()
+                const resultRefreshToken = await argon2.hash(refreshToken)
+                const token = new this.testUserModel({token: resultRefreshToken, email: findUser.email})
+                await token.save()
+                await this.redis.sadd(`index:email:${findUser.email}`, sessId)
+                return {
+                    sessId: sessId,
+                    refreshToken: refreshToken,
+                }
+            } else {
+                return errEnter
+            }
+        } else {
+            return errEnter
+        }
+    }
+
+    async getEmailTest(sessId: string) {
+        const sessionData = await this.redis.get(`sess:${sessId}`)
+        if (sessionData) {
+            const resultSessionData = JSON.parse(sessionData)
+            const userEmail = resultSessionData.user.email
+            const findUser = await this.userModel.findOne({email: userEmail})
+            if (findUser) {
+                return findUser.email
+            }
+        } else {
+            return 'unauth'
+        }
+    }
+
+    async closeSess(sessId: string) {
+        const sessionData = await this.redis.get(`sess:${sessId}`)
+        if (sessionData) {
+            const resultSessionData = JSON.parse(sessionData)
+            const userEmail = resultSessionData.user.email
+            const allUserSessions = await this.redis.smembers(`index:email:${userEmail}`)
+            const deleteSessId = allUserSessions.filter(el => el !== sessId)
+            const pipeline = this.redis.pipeline()
+            for (let item of deleteSessId) {
+                pipeline.del(`sess:${item}`)
+                pipeline.srem(`index:email:${userEmail}`, item)
+            }
+            await pipeline.exec()
+        }
+    }
+
+    async refreshSession(refreshToken: string) {
+        let resultRefreshToken: any = null
+        const allTokens = await this.testUserModel.find().lean()
+        for (let item of allTokens) {
+            const checkToken = await argon2.verify(item.token, refreshToken)
+            if (checkToken) {
+                resultRefreshToken = item
+            }
+        }
+        const sessId = uuidv4()
+        const sessionData = {
+            user: {
+                email: resultRefreshToken.email,
+            },
+            isAuthenticated: true,
+        };
+        await this.redis.setex(
+            `sess:${sessId}`,
+            60,
+            JSON.stringify(sessionData),
+        ) 
+        return sessId
+    }
+
+    async getUserKeywords(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            if (findUser.keyWords.length !== 0) {
+                const favoriteKeyWordsUser = findUser.keyWords.sort((a, b) => b.score - a.score)
+                let resultFavoriteKeyWordsUser: any[] = []
+                if (favoriteKeyWordsUser.length <= 5) {
+                    resultFavoriteKeyWordsUser = favoriteKeyWordsUser
+                } else {
+                    resultFavoriteKeyWordsUser = favoriteKeyWordsUser.slice(0, 5)
+                }
+                const labelsKeyWord = resultFavoriteKeyWordsUser.map(el => el.label)
+                const allPhotos = await this.photoModel.find().lean()
+                const photoWithLabels = allPhotos.map(el => {
+                    return {
+                        ...el,
+                        labels: el.keyWords.map(element => element.label),
+                    }
+                })
+                let keyWordsPhoto: any[] = []
+                for (let label of labelsKeyWord) {
+                    const labelPhoto = photoWithLabels.filter(el => el.labels.includes(label))
+                    let resultLabelPhoto: any[] = []
+                    if (labelPhoto.length <= 6) {
+                        resultLabelPhoto = labelPhoto
+                    } else {
+                        resultLabelPhoto = labelPhoto.slice(0, 6)
+                    }
+                    resultLabelPhoto = resultLabelPhoto.map((el: any) => {
+                        const {labels, ...newPhotoLabel} = el
+                        return newPhotoLabel
+                    })
+                    resultLabelPhoto = await this.photoService.addBase64Photo(resultLabelPhoto)
+                    keyWordsPhoto = [...keyWordsPhoto, {label: label, photos: resultLabelPhoto}]
+                }
+                return {
+                    keyWords: resultFavoriteKeyWordsUser,
+                    labelPhoto: keyWordsPhoto,
+                }
+            } else {
+                return []
             }
         }
     }

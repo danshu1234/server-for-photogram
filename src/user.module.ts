@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { UsersServiceService } from './users-service/users-service.service';
 import { UsersControllerController } from './users-controller/users-controller.controller';
 import { User, UserSchema } from './UserSchema';
@@ -16,14 +16,27 @@ import { MobileControllerController } from './mobile.controller';
 import { PhotoHigh, PhotoHighSchema } from './PhotoHighSchema';
 import { Ava, AvaSchema } from './AvaSchema';
 import { PlanMess, PlanMessSchema } from './PlanMessSchema';
+import { NewTestingUser, NewTestingUserSchema } from './NewTestingUserShema';
+import { TestProcessor } from './test.processor';
+import { BullModule } from '@nestjs/bull';
+import { Photo, PhotoSchema } from './PhotoSchema';
+import { PhotosService } from './photos/photos.service';
+import { PhotosModule } from './photo.module';
 
 @Module({
-    providers: [UsersServiceService, GoogleStrategy],
+    providers: [UsersServiceService, GoogleStrategy, TestProcessor],
     controllers: [UsersControllerController, MobileControllerController],
     imports: [
+        forwardRef(() => PhotosModule),
         ConfigModule.forRoot({
             isGlobal: true, 
             envFilePath: '.env', 
+        }),
+        BullModule.registerQueue({ 
+            name: 'test-queue',   
+            defaultJobOptions: {
+                timeout: 3600000, 
+            },
         }),
         MongooseModule.forFeature([
             {name: User.name, schema: UserSchema}, 
@@ -34,6 +47,8 @@ import { PlanMess, PlanMessSchema } from './PlanMessSchema';
             {name: PhotoHigh.name, schema: PhotoHighSchema},
             {name: Ava.name, schema: AvaSchema},
             {name: PlanMess.name, schema: PlanMessSchema},
+            {name: NewTestingUser.name, schema: NewTestingUserSchema},
+            {name: Photo.name, schema: PhotoSchema},
         ]), 
         SocketModule,
         PassportModule,
@@ -46,7 +61,7 @@ import { PlanMess, PlanMessSchema } from './PlanMessSchema';
                 },
             }),
             inject: [ConfigService],
-        })
+        }),
     ],
     exports: [JwtModule, UsersServiceService, PassportModule],
 })

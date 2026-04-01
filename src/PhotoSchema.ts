@@ -4,6 +4,15 @@ import { Document } from 'mongoose';
 export type PhotoDocument = Photo & Document;
 
 @Schema()
+ export class KeyWord {
+  @Prop({required: true})
+  label: string;
+
+  @Prop()
+  score: number;
+}
+
+@Schema()
 class Comment {
   @Prop({required: true})
   id: string;
@@ -41,6 +50,9 @@ export class Photo {
 
   @Prop({ required: false })
   pin: boolean;
+
+  @Prop({ required: false })
+  keyWords: KeyWord[];
 }
 
 export const PhotoSchema = SchemaFactory.createForClass(Photo);

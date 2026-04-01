@@ -12,6 +12,6 @@ export class OpenAIController {
   userPrompt(@Body() data: {inputPrompt: string}, @Request() req) {
     const body = {email: req.user.email, inputPrompt: data.inputPrompt}
     return this.openAIService.userPrompt(body)
-  }z
+  }
 
 }

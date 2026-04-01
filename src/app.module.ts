@@ -12,6 +12,7 @@ import { MailModule } from './mail.module';
 import { User } from './testing-users/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { RedisModule } from './redis.module';
 
 @Module({
   imports: [
@@ -38,7 +39,8 @@ import { ScheduleModule } from '@nestjs/schedule';
       autoLoadEntities: true,
       synchronize: true,
     }),
-    ScheduleModule.forRoot({})
+    ScheduleModule.forRoot({}),
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],
