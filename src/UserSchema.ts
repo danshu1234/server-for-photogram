@@ -6,6 +6,15 @@ import { KeyWord } from './PhotoSchema';
 export type UserDocument = User & Document;
 
 @Schema()
+export class UserMess {
+  @Prop({ required: true })
+  user: string;
+
+  @Prop({ required: true })
+  message: EncryptMess[];
+}
+
+@Schema()
 export class EncryptMess {
   @Prop({ required: true })
   message: string;
@@ -68,7 +77,7 @@ export class Message {
   user: string;
 
   @Prop({ type: mongoose.Schema.Types.Mixed })
-  text: EncryptMess[] | string;
+  text: UserMess[] | string;
 
   @Prop({ required: AnimationFrameScheduler })
   photos: PhotoMess[] | Buffer[] | Preview[];
@@ -156,7 +165,7 @@ export class User {
   permUsers: [String | boolean];
   
   @Prop({ required: false })
-  messages: Messages[];
+  messages: string[];
 
   @Prop({ required: true })
   banMess: string[];

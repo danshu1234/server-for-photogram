@@ -217,9 +217,9 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string, previewVideo?: string}, @Request() req) {
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, myText: string, previewVideo?: string}, @Request() req) {
         let resultData: any = ''
-        if (body.type !== 'video') {
+        if (body.type !== 'video' && body.type !== 'voice') {
             resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
         } else {
             resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo}
@@ -281,8 +281,9 @@ import EncryptMess from 'src/MessEncryptInterface';
 
     @Patch('edit/mess')
     @UseGuards(CookieJwtGuard)
-    editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email}
+    editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, text: string, myText: string}, @Request() req) {
+        console.log('Text: ')
+        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email, text: JSON.parse(data.text), myText: JSON.parse(data.myText)}
         return this.UsersService.editMess(body)
     }
 
@@ -324,7 +325,7 @@ import EncryptMess from 'src/MessEncryptInterface';
     @UseGuards(CookieJwtGuard)
     pinChat(@Body() data: {user: string, pin: boolean}, @Request() req) {
         const body = {user: data.user, pin: data.pin, email: req.user.email}
-        return this.UsersService.pinChat(body)
+        this.UsersService.pinChat(body)
     }
 
     @Patch('pin/mess')
@@ -652,6 +653,20 @@ import EncryptMess from 'src/MessEncryptInterface';
     getUserKeywords(@Request() req) {
         const email = req.user.email
         return this.UsersService.getUserKeywords(email)
+    }
+
+    @Post('chat/id')
+    @UseGuards(CookieJwtGuard)
+    getChatId(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.getChatId(body)
+    }
+
+    @Post('get/notif/mess')
+    @UseGuards(CookieJwtGuard)
+    getNotifsMess(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.getNotifsMess(body)
     }
 
 

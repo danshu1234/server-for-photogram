@@ -13,10 +13,7 @@ export class PlanMess {
     id: string;
 
     @Prop({ required: animationFrameScheduler })
-    messageForSender: Message;
-
-    @Prop({ required: animationFrameScheduler })
-    messageForTargetUser: Message;
+    message: Message;
 
     @Prop({ required: animationFrameScheduler })
     sender: string;

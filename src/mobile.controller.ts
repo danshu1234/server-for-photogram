@@ -93,7 +93,7 @@ export class MobileControllerController {
 
   @Patch('new/mess')  
   @UseInterceptors(FilesInterceptor('photo'))
-  async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, token: string, myText: string, dateSend?: string, hour?: string, minute?: string}) {
+  async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, token: string, myText: string, dateSend?: string, hour?: string, minute?: string}) {
     const email = await getEmailFromToken(body.token, this.jwtService)  
     const resultData = {...body, files: files, email: email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
     return this.UsersService.newMess(resultData)
@@ -128,9 +128,9 @@ export class MobileControllerController {
   }
 
   @Patch('edit/mess')
-  async editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, token: string}) {
+  async editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, token: string, text: string, myText: string}) {
     const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: email}
+    const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: email, text: JSON.parse(data.text), myText: JSON.parse(data.myText)}
     return this.UsersService.editMess(body)
   }
     

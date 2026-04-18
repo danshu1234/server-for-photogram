@@ -22,6 +22,7 @@ import { BullModule } from '@nestjs/bull';
 import { Photo, PhotoSchema } from './PhotoSchema';
 import { PhotosService } from './photos/photos.service';
 import { PhotosModule } from './photo.module';
+import { Chat, ChatSchema } from './ChatSchema';
 
 @Module({
     providers: [UsersServiceService, GoogleStrategy, TestProcessor],
@@ -49,6 +50,7 @@ import { PhotosModule } from './photo.module';
             {name: PlanMess.name, schema: PlanMessSchema},
             {name: NewTestingUser.name, schema: NewTestingUserSchema},
             {name: Photo.name, schema: PhotoSchema},
+            {name: Chat.name, schema: ChatSchema},
         ]), 
         SocketModule,
         PassportModule,

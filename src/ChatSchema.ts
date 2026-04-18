@@ -5,6 +5,20 @@ import { Message } from './UserSchema';
 
 export type ChatDocument = Chat & Document;
 
+interface PinChat{
+    user: string;
+    pin: boolean;
+}
+
+interface NotifsUser{
+    user: string;
+    notifs: boolean;
+}
+
+interface MessCount{
+    user: string;
+    countMess: number;
+}
 
 @Schema()
 export class Chat {  
@@ -16,6 +30,15 @@ export class Chat {
 
     @Prop({ required: false })
     messages: Message[];
+
+    @Prop({ required: false })
+    messCount: MessCount[];
+
+    @Prop({ required: false })
+    notifs: NotifsUser[];
+
+    @Prop({ required: false })
+    pin: PinChat[];
 }
 
 
