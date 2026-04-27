@@ -39,6 +39,9 @@ export class Chat {
 
     @Prop({ required: false })
     pin: PinChat[];
+
+    @Prop({ required: false })
+    name?: string;
 }
 
 

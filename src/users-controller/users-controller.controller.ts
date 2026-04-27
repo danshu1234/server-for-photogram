@@ -217,10 +217,10 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, myText: string, previewVideo?: string}, @Request() req) {
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, previewVideo?: string}, @Request() req) {
         let resultData: any = ''
         if (body.type !== 'video' && body.type !== 'voice') {
-            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
+            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text)}
         } else {
             resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo}
         }
@@ -230,8 +230,8 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Patch('new/chat')
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, myText: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
+    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, users: string, videoId?: string, groupName?: string}, @Request() req) {
+        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), users: JSON.parse(body.users)}
         return this.UsersService.newChat(resultData)
     }
 
@@ -283,7 +283,7 @@ import EncryptMess from 'src/MessEncryptInterface';
     @UseGuards(CookieJwtGuard)
     editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, text: string, myText: string}, @Request() req) {
         console.log('Text: ')
-        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email, text: JSON.parse(data.text), myText: JSON.parse(data.myText)}
+        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email, text: JSON.parse(data.text)}
         return this.UsersService.editMess(body)
     }
 
@@ -552,11 +552,10 @@ import EncryptMess from 'src/MessEncryptInterface';
         }
     }
 
-    @Get('public/keys/:email')
+    @Post('public/keys')
     @UseGuards(CookieJwtGuard)
-    getPublicKeys(@Param('email') email: string, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: email}
-        return this.UsersService.getPublicKeys(body)
+    getPublicKeys(@Body() body: {usersChat: string[]}) {
+        return this.UsersService.getPublicKeys(body.usersChat)
     }
 
     @Patch('add/public/key')
@@ -667,6 +666,23 @@ import EncryptMess from 'src/MessEncryptInterface';
     getNotifsMess(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.UsersService.getNotifsMess(body)
+    }
+
+    @Post('get/users/chat')
+    getChatUsers(@Body() body: {trueParamEmail: string}) {
+        return this.UsersService.getUsersChat(body.trueParamEmail)
+    }
+
+    @Get('chat/name/:id')
+    getChatName(@Param('id') id: string) {
+        return this.UsersService.getNameChat(id)
+    }
+
+    @Post('get/notif/status')
+    @UseGuards(CookieJwtGuard)
+    getNotifStatus(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.getNotifStatus(body)
     }
 
 

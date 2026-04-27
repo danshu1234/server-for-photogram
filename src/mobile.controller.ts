@@ -99,13 +99,13 @@ export class MobileControllerController {
     return this.UsersService.newMess(resultData)
   }
 
-  @Patch('new/chat')
-  @UseInterceptors(FilesInterceptor('photo'))
-  async newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, token: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService)  
-    const resultData = {...body, files: files, email: email}
-    return this.UsersService.newChat(resultData)
-  }
+  // @Patch('new/chat')
+  // @UseInterceptors(FilesInterceptor('photo'))
+  // async newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, videoId?: string, token: string}) {
+  //   const email = await getEmailFromToken(body.token, this.jwtService)  
+  //   const resultData = {...body, files: files, email: email}
+  //   return this.UsersService.newChat(resultData)
+  // }
 
   @Post('get/my/ban/mess')
   async getMyBanMess(@Body() body: {token: string}) {
@@ -233,12 +233,12 @@ export class MobileControllerController {
     return this.UsersService.addPublicKey(body)
   }
 
-  @Post('public/keys/:email')
-  async getPublicKeys(@Param('email') userEmail: string, @Body() data: {token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, trueParamEmail: userEmail}
-    return this.UsersService.getPublicKeys(body)
-  }
+  // @Post('public/keys/:email')
+  // async getPublicKeys(@Param('email') userEmail: string, @Body() data: {token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, trueParamEmail: userEmail}
+  //   return this.UsersService.getPublicKeys(body)
+  // }
 
   @Post('get/file')
   async getFile(@Body() data: {trueParamEmail: string, messId: string, token: string}, @Request() req, @Res() res) {
