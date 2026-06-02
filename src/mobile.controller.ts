@@ -84,12 +84,12 @@ export class MobileControllerController {
     this.UsersService.zeroMess(body)
   }
 
-  @Patch('delete/mess')
-  async deleteMess(@Body() data: {trueParamEmail: string, messId: string[], token: string, unreadCount: number}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
-    return this.UsersService.deleteMess(body)
-  }
+  // @Patch('delete/mess')
+  // async deleteMess(@Body() data: {trueParamEmail: string, messId: string[], token: string, unreadCount: number}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
+  //   return this.UsersService.deleteMess(body)
+  // }
 
   @Patch('new/mess')  
   @UseInterceptors(FilesInterceptor('photo'))
@@ -155,19 +155,19 @@ export class MobileControllerController {
     return this.UsersService.deleteChat(body)
   }
 
-  @Post('big/photos')
-  async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {...data, email: email}
-    const archive = await this.UsersService.getBigPhotos(body)
-    res.set({
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="photos_${data.messId}.zip"`,
-    });
-    if (archive) {
-        archive.pipe(res)
-    }
-  }
+  // @Post('big/photos')
+  // async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {...data, email: email}
+  //   const archive = await this.UsersService.getBigPhotos(body)
+  //   res.set({
+  //       'Content-Type': 'application/zip',
+  //       'Content-Disposition': `attachment; filename="photos_${data.messId}.zip"`,
+  //   });
+  //   if (archive) {
+  //       archive.pipe(res)
+  //   }
+  // }
 
   @Post('video')
   async getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
@@ -199,12 +199,12 @@ export class MobileControllerController {
     return this.UsersService.getUserInfo(email)
   }
 
-  @Patch('new/avatar')
-  async newAvatar(@Body() data: {token: string, resultAvatar: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {targetEmail: email, newAva: data.resultAvatar}
-    this.UsersService.newAvatar(body)
-  } 
+  // @Patch('new/avatar')
+  // async newAvatar(@Body() data: {token: string, resultAvatar: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {targetEmail: email, newAva: data.resultAvatar}
+  //   this.UsersService.newAvatar(body)
+  // } 
 
   @Patch('new/name')
   async newName(@Body() data: {token: string, name: string}) {

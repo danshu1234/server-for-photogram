@@ -23,6 +23,7 @@ import { Photo, PhotoSchema } from './PhotoSchema';
 import { PhotosService } from './photos/photos.service';
 import { PhotosModule } from './photo.module';
 import { Chat, ChatSchema } from './ChatSchema';
+import { GroupAva, GroupAvaSchema } from './GroupAvaSchema';
 
 @Module({
     providers: [UsersServiceService, GoogleStrategy, TestProcessor],
@@ -51,6 +52,7 @@ import { Chat, ChatSchema } from './ChatSchema';
             {name: NewTestingUser.name, schema: NewTestingUserSchema},
             {name: Photo.name, schema: PhotoSchema},
             {name: Chat.name, schema: ChatSchema},
+            {name: GroupAva.name, schema: GroupAvaSchema},
         ]), 
         SocketModule,
         PassportModule,

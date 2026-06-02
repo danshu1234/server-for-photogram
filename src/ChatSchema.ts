@@ -42,6 +42,12 @@ export class Chat {
 
     @Prop({ required: false })
     name?: string;
+
+    @Prop({ required: false })
+    admin?: string[];
+
+    @Prop({ required: false })
+    avatar?: string;
 }
 
 

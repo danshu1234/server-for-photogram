@@ -1,4 +1,4 @@
-import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request, Res, UploadedFile } from '@nestjs/common';
 import { UsersServiceService } from 'src/users-service/users-service.service';
 import Message from 'src/Message';
 import EmailAndTrueParamEmail from 'src/emailInterface';
@@ -6,7 +6,7 @@ import { EmailDto } from 'src/EmailDto';
 import { UserDto } from './UserDto';
 import { NewUserDto } from 'src/NewUserDto';
 import { CreateUser } from 'src/CreateUser';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from 'jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
@@ -143,9 +143,10 @@ import EncryptMess from 'src/MessEncryptInterface';
 
     @Patch('new/avatar')
     @UseGuards(CookieJwtGuard)
-    newAvatar(@Body() data: {newAva: string}, @Request() req) {
+    @UseInterceptors(FileInterceptor('ava'))
+    newAvatar(@UploadedFile() ava: Express.Multer.File, @Request() req) {
         const resultEmail: string = req.user.email
-        const body = {targetEmail: resultEmail, newAva: data.newAva}
+        const body = {targetEmail: resultEmail, ava: ava}
         this.UsersService.newAvatar(body)
     }
 
@@ -217,12 +218,16 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Patch('new/mess')  
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, previewVideo?: string}, @Request() req) {
+    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, previewVideo?: string, options?: string}, @Request() req) {
         let resultData: any = ''
-        if (body.type !== 'video' && body.type !== 'voice') {
-            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text)}
+        if (body.options) {
+            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans), options: JSON.parse(body.options)}
         } else {
-            resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo}
+            if (body.type !== 'video' && body.type !== 'voice') {
+                resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans)}
+            } else {
+                resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo, ans: JSON.parse(body.ans)}
+            }
         }
         return this.UsersService.newMess(resultData)
     }
@@ -231,7 +236,7 @@ import EncryptMess from 'src/MessEncryptInterface';
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
     newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, users: string, videoId?: string, groupName?: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), users: JSON.parse(body.users)}
+        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), users: JSON.parse(body.users), ans: JSON.parse(body.ans)}
         return this.UsersService.newChat(resultData)
     }
 
@@ -269,8 +274,8 @@ import EncryptMess from 'src/MessEncryptInterface';
 
     @Patch('delete/mess')
     @UseGuards(CookieJwtGuard)
-    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], unreadCount: number}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadCount: data.unreadCount}
+    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], readStatus: {user: string, read: boolean}[]}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, readStatus: data.readStatus}
         return this.UsersService.deleteMess(body)
     }
 
@@ -505,6 +510,7 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Post('get/friend/mess/count')
     @UseGuards(CookieJwtGuard)
     getFriendMessCount(@Body() data: {trueParamEmail: string}, @Request() req) {
+        console.log('Here')
         const body = {...data, email: req.user.email}
         return this.UsersService.getFriendMessCount(body)
     }
@@ -539,16 +545,14 @@ import EncryptMess from 'src/MessEncryptInterface';
 
     @Post('big/photos')
     @UseGuards(CookieJwtGuard)
-    async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string}, @Request() req, @Res() res: Response) {
-        console.log(data)
-        const body = {...data, email: req.user.email}
-        const archive = await this.UsersService.getBigPhotos(body)
-        res.set({
-            'Content-Type': 'application/zip',
-            'Content-Disposition': `attachment; filename="photos_${data.messId}.zip"`,
-        });
-        if (archive) {
-            archive.pipe(res)
+    async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string, photoId: string}, @Request() req, @Res() res: Response) {
+        const body = {...data, email: req.user.email, photoId: data.photoId}
+        const photoBuffer = await this.UsersService.getBigPhotos(body)
+        if (photoBuffer) {
+            res.setHeader('Content-Type', 'image/jpeg/png')
+            res.setHeader('Content-Length', photoBuffer.photo.length)
+            res.setHeader('X-Metadata', JSON.stringify(photoBuffer.id))
+            return res.send(photoBuffer.photo)
         }
     }
 
@@ -683,6 +687,71 @@ import EncryptMess from 'src/MessEncryptInterface';
     getNotifStatus(@Body() data: {trueParamEmail: string}, @Request() req) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
         return this.UsersService.getNotifStatus(body)
+    }
+
+    @Post('get/group/users')
+    @UseGuards(CookieJwtGuard)
+    getUsersGroup(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.getUsersGroup(body)
+    }
+
+    @Patch('delete/particip')
+    @UseGuards(CookieJwtGuard)
+    deleteParticip(@Body() data: {trueParamEmail: string, particip: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, particip: data.particip}
+        return this.UsersService.deleteParticip(body)
+    }
+    
+    @Patch('add/new/particip')
+    @UseGuards(CookieJwtGuard)
+    addParticip(@Body() data: {trueParamEmail: string, particip: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, particip: data.particip}
+        return this.UsersService.addParticip(body)
+    }
+
+    @Patch('chat/exit')
+    @UseGuards(CookieJwtGuard)
+    chatExit(@Body() data: {trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
+        return this.UsersService.chatExit(body)
+    }
+
+    @Patch('group/new/avatar')
+    @UseGuards(CookieJwtGuard)
+    @UseInterceptors(FileInterceptor('ava'))
+    avatarChat(@Body() data: {id: string}, @UploadedFile() ava: Express.Multer.File, @Request() req) {
+        const resultEmail: string = req.user.email
+        const body = {email: resultEmail, trueParamEmail: data.id, ava: ava}
+        this.UsersService.avatarChat(body)
+    }
+
+    @Patch('new/reactions')
+    @UseGuards(CookieJwtGuard)
+    reactions(@Body() data: {reactionsMess: {reaction: string, users: string[]}[], messEmojies: string, trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        this.UsersService.reactions(body)
+    }
+
+    @Post('preview/photo')
+    @UseGuards(CookieJwtGuard)
+    getPreviewPhoto(@Body() data: {messId: string, trueParamEmail: string, indexPhoto: number}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        return this.UsersService.previewPhoto(body)
+    }
+
+    @Patch('vote/user')
+    @UseGuards(CookieJwtGuard)
+    voteUser(@Body() data: {messId: string, trueParamEmail: string, voteId: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        this.UsersService.voteUser(body)
+    }
+
+    @Patch('voice/revoke')
+    @UseGuards(CookieJwtGuard)
+    voiceRevoke(@Body() data: {messId: string, trueParamEmail: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        this.UsersService.voiceRevoke(body)
     }
 
 

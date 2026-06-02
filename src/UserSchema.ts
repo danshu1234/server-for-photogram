@@ -60,6 +60,37 @@ export class Preview {
 }
 
 @Schema()
+export class Ans {
+  @Prop({ required: true })
+  text: string;
+
+  @Prop({ required: true })
+  id: string;
+
+}
+
+@Schema()
+export class Reaction {
+  @Prop({ required: true })
+  reaction: string;
+
+  @Prop({ required: false })
+  users: string[];
+}
+
+@Schema()
+export class Vote {
+  @Prop({ required: false })
+  id: string;
+
+  @Prop({ required: false })
+  option: string;
+
+  @Prop({ required: true })
+  users: string[];
+}
+
+@Schema()
 export class Notification {
   @Prop({ required: true })
   type: string;
@@ -88,8 +119,8 @@ export class Message {
   @Prop({ required: true })
   id: string;
 
-  @Prop({ required: false })
-  ans: string;
+  @Prop({ type: mongoose.Schema.Types.Mixed })
+  ans: Ans | null;
 
   @Prop({ required: false })
   edit: boolean;
@@ -102,6 +133,12 @@ export class Message {
 
   @Prop({ required: true })
   pin: boolean;
+
+  @Prop({ required: true })
+  reactions: Reaction[];
+
+  @Prop({ required: false })
+  votes?: Vote[];
 }
 
 @Schema()
@@ -120,6 +157,9 @@ export class Messages {
 
   @Prop({ required: true })
   notifs: boolean;
+  
+  @Prop({ required: true })
+  users: string[];
 }
 
 @Schema()

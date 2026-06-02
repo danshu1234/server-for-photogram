@@ -19,7 +19,7 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-    exposedHeaders: ['Content-Length', 'Content-Type'],
+    exposedHeaders: ['Content-Length', 'Content-Type', 'X-Metadata'],
   });
 
   const interfaces = os.networkInterfaces();

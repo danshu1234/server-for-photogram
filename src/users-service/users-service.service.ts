@@ -36,13 +36,14 @@ import Redis from 'ioredis';
 import { Photo, PhotoDocument } from 'src/PhotoSchema';
 import { PhotosService } from 'src/photos/photos.service';
 import { Chat, ChatDocument } from 'src/ChatSchema';
+import { GroupAva, GroupAvaDocument } from 'src/GroupAvaSchema';
 
 @Injectable()
 export class UsersServiceService {
 
     private bucket: GridFSBucket;
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>, @InjectModel(NewTestingUser.name) private readonly newTestingUserModel: Model<NewTestingUserDocument>, @InjectQueue('test-queue') private testQueue: Queue, @Inject(REDIS_CLIENT) private redis: Redis, @InjectModel(NewTestingUser.name) private readonly testUserModel: Model<NewTestingUserDocument>, @InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @Inject(forwardRef(() => PhotosService)) private readonly photoService: PhotosService, @InjectModel(Chat.name) private chatModel: Model<ChatDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>, @InjectConnection() private readonly connection: Connection, private readonly socketGateway: SocketGateway, private readonly mailerService: MailerService, @InjectModel(Code.name) private codeModel: Model<CodeDocument>, @InjectModel(EnterCode.name) private enterCodeModel: Model<EnterCodeDocument>, private jwtService: JwtService, @InjectModel(TestingUser.name) private readonly refreshTokensModel: Model<TestingUserDocument>, @InjectModel(Video.name) private VideoModel: Model<VideoDocument>, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(Ava.name) private avaModel: Model<AvaDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>, @InjectModel(NewTestingUser.name) private readonly newTestingUserModel: Model<NewTestingUserDocument>, @InjectQueue('test-queue') private testQueue: Queue, @Inject(REDIS_CLIENT) private redis: Redis, @InjectModel(NewTestingUser.name) private readonly testUserModel: Model<NewTestingUserDocument>, @InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @Inject(forwardRef(() => PhotosService)) private readonly photoService: PhotosService, @InjectModel(Chat.name) private chatModel: Model<ChatDocument>, @InjectModel(GroupAva.name) private groupAva: Model<GroupAvaDocument>) {}
     
     onModuleInit() {
         if (!this.connection.db) {
@@ -88,6 +89,28 @@ export class UsersServiceService {
             return true
         } else {
             return false
+        }
+    }
+
+    async getChat(email: string, trueParamEmail: string) {
+        let resultChat: any = ''
+        const isUserSearch = await this.isEmail(trueParamEmail)
+        if (isUserSearch) {
+            const chatsUser = await this.chatFindEmail(email, trueParamEmail)
+            if (chatsUser.length !== 0) {
+                resultChat = chatsUser[0]
+            }
+            resultChat = chatsUser[0]
+        } else {
+            const findChat = await this.chatModel.findOne({id: trueParamEmail})
+            if (findChat) {
+                resultChat = findChat
+            }
+        }
+        if (resultChat !== '') {
+            return resultChat
+        } else {
+            return undefined
         }
     }
 
@@ -513,13 +536,20 @@ export class UsersServiceService {
         }
     }
 
-    async newAvatar(body: {targetEmail: string, newAva: string}) {
+    async newAvatar(body: {targetEmail: string, ava: Express.Multer.File}) {
         const findAva = await this.avaModel.findOne({email: body.targetEmail}) 
+        const avaBuffer = await sharp(body.ava.buffer)
+            .resize(224, 224) 
+            .png()
+            .toBuffer()
+
+        const base64 = avaBuffer.toString('base64')
+        const resultAvatar = `data:image/png;base64,${base64}`
         if (findAva) {
-            await this.avaModel.findOneAndUpdate({email: body.targetEmail}, {avatar: body.newAva}, {new: true})
+            await this.avaModel.findOneAndUpdate({email: body.targetEmail}, {avatar: resultAvatar}, {new: true})
             await this.userModel.findOneAndUpdate({email: body.targetEmail}, {avatar: ''}, {new: true})
         } else {
-            const ava = new this.avaModel({email: body.targetEmail, avatar: body.newAva})
+            const ava = new this.avaModel({email: body.targetEmail, avatar: resultAvatar})
             await ava.save()
         }
     }
@@ -645,7 +675,7 @@ export class UsersServiceService {
             let resultChats: any = []
             for (let chat of userChats) {
                 let friendEmail: string = ''
-                if (chat.users.length >= 3) {
+                if ('name' in chat) {
                     friendEmail = chat.id
                 } else {
                     friendEmail = chat.users.filter(el => el !== email)[0]
@@ -655,19 +685,23 @@ export class UsersServiceService {
                 const findMessCount = chat.messCount.find(el => el.user === email)
                 const findMessNotifs = chat.notifs.find(el => el.user === email)
                 const resultMessages = chat.messages.map(el => {
-                    if (el.typeMess === 'text') {
+                    if (el.typeMess === 'text' || el.typeMess === 'vote') {
                         const findMyMessText = el.text.find(element => element.user === email)
+                        if (findMyMessText) {
                             return {
                                 ...el,
                                 text: findMyMessText.message,
                             }
+                        } else {
+                            return false
+                        }
                     } else {
                         return {
                             ...el,
                             text: el.text,
                         }
                     }
-                })
+                }).filter(el => el !== false)
                 if (userChat) {
                     resultChats = [...resultChats, {...chat, messages: resultMessages, onlineStatus: userChat.onlineStatus, user: friendEmail, pin: findPinStatus.pin, messCount: findMessCount.countMess, notifs: findMessNotifs.notifs}]
                 } else {
@@ -683,82 +717,93 @@ export class UsersServiceService {
                 }
             }
             resultChatsUser = resultChatsUser.reverse()
-            return resultChatsUser
+            const chatsUser = resultChatsUser.map(el => {
+                const resultMessages = el.messages.map(element => {
+                    if (element.users.includes(email)) {
+                        return element
+                    } else {
+                        return false
+                    }
+                }).filter(el => el !== false)
+                return {
+                    ...el,
+                    messages: resultMessages,
+                }
+            }).filter(el => el.messages.length !== 0)
+            let chatsWithAvatars: any[] = []
+            for (let item of chatsUser) {
+                if (item.users.length > 2) {
+                    if (item.avatar !== '') {
+                        const resultAvatar = await this.groupAva.findOne({id: item.avatar})
+                        if (resultAvatar) {
+                            chatsWithAvatars = [...chatsWithAvatars, {...item, avatar: resultAvatar.avatar}]
+                        }
+                    } else {
+                        chatsWithAvatars = [...chatsWithAvatars, item]
+                    }
+                } else {
+                    chatsWithAvatars = [...chatsWithAvatars, item]
+                }
+            }
+            return chatsWithAvatars
         }
     }
 
     async getMess(body: EmailAndTrueParamEmail) {
-        let findChat: any = ''
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        if (isUserSearch) {
-            findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail})
-            findChat = [chatUser]
-        }
-        const findUser = await this.userModel.findOne({email: body.email})
-        console.log('Chat: ')
-        console.log(findChat)
-        let chatsUser: any[] = []
-        if (findUser) {
-            for (let item of findChat) {
-                if (findUser.messages.includes(item.id)) {
-                    chatsUser = [...chatsUser, item]
-                }
-            }
-        }
-        let resultChat: any = ''
-        if (chatsUser.length > 1) {
-            const resultMessages = [...chatsUser[0], chatsUser[1]]
-            resultChat = {
-                ...chatsUser[0],
-                messages: resultMessages,
-            }
-        } else {
-            resultChat = chatsUser[0]
-        }
+        let resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             const resultMessages = resultChat.messages.map(el => {
-                let resultText: any = ''
-                if (process.env.ENCRYPTION_KEY && el.text !== '') {
-                    if ((el.typeMess === 'video' && typeof el.text === 'string') || (el.typeMess === 'voice' && typeof el.text === 'string')) {
-                        resultText = el.text
+                if (el.users.includes(body.email)) {
+                    let resultText: any = ''
+                    if (process.env.ENCRYPTION_KEY && el.text !== '') {
+                        if ((el.typeMess === 'video' && typeof el.text === 'string') || (el.typeMess === 'voice' && typeof el.text === 'string')) {
+                            resultText = el.text
+                        } else {
+                            resultText = el.text
+                        }
                     } else {
-                        resultText = el.text
+                        resultText = ''
+                    }
+                    if (el.typeMess === 'text' || el.typeMess === 'vote') {
+                        const findUserMess = el.text.find(element => element.user === body.email)
+                        return {
+                            ...el,
+                            text: findUserMess.message,
+                        }
+                    } else {
+                        return {
+                            ...el,
+                            text: el.text,
+                        }
                     }
                 } else {
-                    resultText = ''
-                }
-                if (el.typeMess === 'text') {
-                    const findUserMess = el.text.find(element => element.user === body.email)
-                    return {
-                        ...el,
-                        text: findUserMess.message,
-                    }
-                } else {
-                    return {
-                        ...el,
-                        text: el.text,
-                    }
+                    return false
                 }
             })
-            findChat = {
-                ...findChat[0],
-                messages: resultMessages,
+            resultChat = {
+                ...resultChat,
+                messages: resultMessages.filter(el => el !== false),
             }
-            if (findChat === undefined) {
+            if (resultChat === undefined) {
                 return []
             } else {
-                const resultMessages = await Promise.all(findChat.messages.map(async message => {
+                const resultMessages = await Promise.all(resultChat.messages.map(async message => {
                     if (message.photos.length !== 0) {
                         if (message.typeMess === 'text') {
                             let resultText: any = ''
                             if (process.env.ENCRYPTION_KEY) {
                                 resultText = message.text
                             }
+                            const resultPhotos = message.photos.map(el => {
+                                return {
+                                    base64: '',
+                                    id: el.id,
+                                }
+                            })
                             return {
                                 ...message,
                                 text: message.text,
+                                photos: resultPhotos,
                             }
                         } else {
                             return {...message, photos: []}
@@ -767,14 +812,30 @@ export class UsersServiceService {
                         return message
                     }
                 }))
-                return resultMessages
+                const messagesWithAllVote = resultMessages.map(el => {
+                    if (el.typeMess === 'vote') {
+                        let allVote: string[] = []
+                        for (let vote of el.votes) {
+                            for (let user of vote.users) {
+                                allVote = [...allVote, user]
+                            }
+                        }
+                        return {
+                            ...el,
+                            allUserVotes: allVote,
+                        }
+                    } else {
+                        return el
+                    }
+                })
+                return messagesWithAllVote
             }
         } else {
             return []
         }
     }
 
-    async newMess(resultData: {user: string, text: {user: string, message: EncryptMess[]}[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, origChatId: string, files: any, videoId?: string, dateSend?: string, hour?: string, minute?: string, previewVideo?: string}) {
+    async newMess(resultData: {user: string, text: {user: string, message: EncryptMess[]}[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, origChatId: string, files: any, videoId?: string, dateSend?: string, hour?: string, minute?: string, previewVideo?: string, options?: {id: string, option: string, users: string[]}[]}) {
         const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
         const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
@@ -819,7 +880,7 @@ export class UsersServiceService {
                     const resultPhotoFiles = await Promise.all(
                         resultData.files.map(async(el) => {
                             const resultBuffer = await sharp(el.buffer)
-                            .resize(200, 200)
+                            .resize(100, 100)
                             .jpeg({quality: 70})
                             .toBuffer()
                             const base64 = `data:image/jpeg;base64,${resultBuffer.toString('base64')}`
@@ -857,96 +918,119 @@ export class UsersServiceService {
         }
         let resultChat: any = ''
         if (findMe && findFriend) {
-            resultChat = findChat.find(el => findMe.messages.includes(el.id) && findFriend.messages.includes(el.id))
-            chatName = resultData.email
+            resultChat = findChat[0]
         } else {
             resultChat = findChat
             chatName = resultChat.name
         }
         let resultMessage: any = ''
-        if (resultChat) {
-            if (resultData.type !== 'video' && resultData.type !== 'voice') {
-                resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
-            } else if (resultData.type === 'video') {
-                if (resultData.videoId && resultData.per === '') {
-                    if (resultData.email !== resultData.trueParamEmail) {
-                        resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
-                    } else {
-                        resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
-                    }
+        console.log('Chat: ')
+        console.log(resultChat)
+        if (resultChat.users.includes(resultData.email)) {
+            if (resultChat) {
+                console.log('Function works')
+                if (resultData.options) {
+                    resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: [], votes: resultData.options}] 
                 } else {
-                    if (resultData.email !== resultData.trueParamEmail) {
-                        resultMessage = [...resultChat.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
-                    } else {
-                        resultMessage = [...resultChat.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]                            
-                    }
-                }
-            } else if (resultData.type === 'voice') {
-                resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
-            }
-            if (resultData.email !== resultData.trueParamEmail) {
-                if (!resultData.dateSend && !resultData.hour && !resultData.minute) {
-                    const messCountFriend = resultChat.messCount.map(el => {
-                        if (el.user === resultData.trueParamEmail) {
-                            return {
-                                user: el.user,
-                                countMess: el.countMess + 1,
+                    if (resultData.type !== 'video' && resultData.type !== 'voice') {
+                        console.log('Particip: ')
+                        resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
+                    } else if (resultData.type === 'video') {
+                        if (resultData.videoId && resultData.per === '') {
+                            if (resultData.email !== resultData.trueParamEmail) {
+                                resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
+                            } else {
+                                resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
                             }
                         } else {
-                            return el
+                            if (resultData.email !== resultData.trueParamEmail) {
+                                resultMessage = [...resultChat.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
+                            } else {
+                                resultMessage = [...resultChat.messages, {user: resultData.user, text: videoId, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]                            
+                            }
                         }
-                    })
-                    await this.chatModel.findOneAndUpdate({id: resultChat.id}, {messages: resultMessage, messCount: messCountFriend}, {new: true})
+                    } else if (resultData.type === 'voice') {
+                        resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
+                    }
                 }
-            }
-        } else {
-            if (findFriend) {
-                const date = new Date(); 
-                const day = date.getDate().toString().padStart(2, '0'); 
-                const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
-                const year = date.getFullYear().toString().slice(-2);
-                const formattedDate = `${day}.${month}.${year}`
-                const id = date.getTime().toString()
-                const newFriendChats = [...findFriend.messages, {user: resultData.email, messages: [{user: resultData.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
-                await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendChats}, {new: true})
-            }
-        }
-        let resultPhotos: any = []
-        if (resultData.type === 'text') {
-            resultPhotos = resultFiles
-        } 
-        for (let item of resultChat.users) {
-            if (item !== resultData.email) {
-                const findUser = await this.userModel.findOne({email: item})
-                if (findUser) {
-                    if (findUser.socket !== undefined && resultData.email !== resultData.trueParamEmail && !resultData.dateSend && !resultData.hour && !resultData.minute) {
-                        if (resultData.type === 'video') {
-                            if (resultData.videoId) {
-                                for (let socket of findUser.socket) {
-                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                if (resultData.email !== resultData.trueParamEmail) {
+                    if (!resultData.dateSend && !resultData.hour && !resultData.minute) {
+                        const messCountFriend = resultChat.messCount.map(el => {
+                            if (resultChat.users.includes(el.user)) {
+                                if (el.user !== resultData.email) {
+                                    return {
+                                        user: el.user,
+                                        countMess: el.countMess + 1,
+                                    }
+                                } else {
+                                    return el
                                 }
                             } else {
-                                for (let socket of findUser.socket) {
-                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
-                                }
+                                return el
                             }
-                        } else {
-                            if (typeof resultData.text !== 'string') {
-                                const findTextUser = resultData.text.find(el => el.user === item)
-                                console.log('Text: ')
-                                console.log(findTextUser)
-                                for (let socket of findUser.socket) {
-                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: findTextUser?.message, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                        })
+                        console.log('Mess count: ')
+                        console.log(messCountFriend)
+                        await this.chatModel.findOneAndUpdate({id: resultChat.id}, {messages: resultMessage, messCount: messCountFriend}, {new: true})
+                    }
+                }
+            } else {
+                if (findFriend) {
+                    const date = new Date(); 
+                    const day = date.getDate().toString().padStart(2, '0'); 
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0'); 
+                    const year = date.getFullYear().toString().slice(-2);
+                    const formattedDate = `${day}.${month}.${year}`
+                    const id = date.getTime().toString()
+                    const newFriendChats = [...findFriend.messages, {user: resultData.email, messages: [{user: resultData.email, text: resultData.text, photos: resultData.files, date: formattedDate, id: id, ans: '', edit: false, typeMess: resultData.type, per: '', pin: false}], messCount: 1, pin: false, notifs: true}]
+                    await this.userModel.findOneAndUpdate({email: resultData.trueParamEmail}, {messages: newFriendChats}, {new: true})
+                }
+            }
+            let resultPhotos: any = []
+            if (resultData.type === 'text') {
+                resultPhotos = resultFiles
+            } 
+            for (let item of resultChat.users) {
+                if (item !== resultData.email) {
+                    const findUser = await this.userModel.findOne({email: item})
+                    if (findUser) {
+                        if (findUser.socket !== undefined && resultData.email !== resultData.trueParamEmail && !resultData.dateSend && !resultData.hour && !resultData.minute) {
+                            if (resultData.type === 'video') {
+                                if (resultData.videoId) {
+                                    for (let socket of findUser.socket) {
+                                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                    }
+                                } else {
+                                    for (let socket of findUser.socket) {
+                                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                    }
+                                }
+                            } else {
+                                if (typeof resultData.text !== 'string') {
+                                    const findTextUser = resultData.text.find(el => el.user === item)
+                                    console.log('Text: ')
+                                    console.log(findTextUser)
+                                    for (let socket of findUser.socket) {
+                                        if (resultData.options) {
+                                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: findTextUser?.message, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false, votes: resultData.options}})
+                                        } else {
+                                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: findTextUser?.message, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users}})
+                                        }
+                                    }
+                                } else {
+                                    for (let socket of findUser.socket) {
+                                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        return {
-            status: 'OK',
-            photos: resultFiles,
+            return {
+                status: 'OK',
+                photos: resultFiles,
+            }
         }
     }
 
@@ -978,6 +1062,11 @@ export class UsersServiceService {
                     resultFiles = resultPhotoFiles
                 }
             }
+        const resultUsers = [...resultData.users, resultData.email]
+        let chatName: string = ''
+        if (resultData.groupName) {
+            chatName = resultData.groupName
+        }
         if (resultData.type === 'video' && typeof resultData.text === 'string') {
             if (resultData.per === '') {
                 if (resultData.videoId) {
@@ -990,15 +1079,14 @@ export class UsersServiceService {
         }
         let messNew: any = []
         if (resultData.type !== 'video') {
-            messNew = [{user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
+            messNew = [{user: resultData.user, text: resultData.text, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultUsers, reactions: []}]
         } else {
             if (resultData.videoId) {
-                messNew = [{user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
+                messNew = [{user: resultData.user, text: resultData.videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultUsers, reactions: []}]
             } else {
-                messNew = [{user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false}]
+                messNew = [{user: resultData.user, text: videoId, date: resultData.date, photos: resultFiles, id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultUsers, reactions: []}]
             }
         }
-        const resultUsers = [...resultData.users, resultData.email]
         const usersMessCount = resultUsers.map(el => {
             if (el === resultData.email) {
                 return {
@@ -1026,7 +1114,7 @@ export class UsersServiceService {
         })
         const chatId = uuidv4()
         if (resultData.groupName) {
-            const chat = new this.chatModel({id: chatId, users: resultUsers, messages: messNew, messCount: usersMessCount, notifs: usersNotifChat, pin: usersPinChat, name: resultData.groupName})
+            const chat = new this.chatModel({id: chatId, users: resultUsers, messages: messNew, messCount: usersMessCount, notifs: usersNotifChat, pin: usersPinChat, name: resultData.groupName, admin: [resultData.email], avatar: ''})
             await chat.save()
         } else {
             const chat = new this.chatModel({id: chatId, users: resultUsers, messages: messNew, messCount: usersMessCount, notifs: usersNotifChat, pin: usersPinChat})
@@ -1044,21 +1132,35 @@ export class UsersServiceService {
         if (resultData.type === 'text') {
             resultPhotos = resultFiles
         } 
-        if (findFriend?.socket) {
-            if (findFriend?.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
-                if (resultData.type === 'video') {
-                    if (resultData.videoId) {
-                        for (let socket of findFriend.socket) {
-                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+        for (let item of resultData.users) {
+            if (item !== resultData.email) {
+                const findUser = await this.userModel.findOne({email: item})
+                if (findUser) {
+                    if (findUser.socket !== undefined && resultData.email !== resultData.trueParamEmail) {
+                        if (resultData.type === 'video') {
+                            if (resultData.videoId) {
+                                for (let socket of findUser.socket) {
+                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: resultData.videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                }
+                            } else {
+                                for (let socket of findUser.socket) {
+                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: videoId, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                }
+                            }
+                        } else {
+                            if (typeof resultData.text !== 'string') {
+                                const findTextUser = resultData.text.find(el => el.user === item)
+                                console.log('Text: ')
+                                console.log(findTextUser)
+                                for (let socket of findUser.socket) {
+                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: findTextUser?.message, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                }
+                            } else {
+                                for (let socket of findUser.socket) {
+                                    this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: {email: resultData.trueParamEmail, name: chatName, sender: resultData.email}, text: resultData.text, photos: resultPhotos, id:  resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
+                                }
+                            }
                         }
-                    } else {
-                        for (let socket of findFriend.socket) {
-                            this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: videoId, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
-                        }
-                    }
-                } else {
-                    for (let socket of findFriend.socket) {
-                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'message', user: findMe?.email, text: resultData.text, photos: resultPhotos, id: resultData.id, ans: resultData.ans, socketId: '', typeMess: resultData.type, per: resultData.per, pin: false}})
                     }
                 }
             }
@@ -1066,19 +1168,12 @@ export class UsersServiceService {
         return {
             status: 'OK',
             photos: resultFiles,
+            id: chatId,
         }
     }   
 
     async zeroMess(body: EmailAndTrueParamEmail) {
-        let resultChat: any = ''
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        if (isUserSearch) {
-            const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-            resultChat = findChat[0]
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail})
-            resultChat = chatUser
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             const messCountNew = resultChat.messCount.map(el => {
                 if (el.user === body.email) {
@@ -1128,29 +1223,45 @@ export class UsersServiceService {
         }
     }
 
-    async deleteMess(body: {email: string, trueParamEmail: string, messId: string[], unreadCount: number}) {
+    async deleteMess(body: {email: string, trueParamEmail: string, messId: string[], readStatus: {user: string, read: boolean}[]}) {
         let newMess: any = []
         let deleteVideoId: string[] = []
         let deletePhotoId: any[] = []
-        let findChat: any = ''
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        if (isUserSearch) {
-            findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail})
-            findChat = [chatUser]
-        }
-        let resultChat: any = ''
-        for (let item of findChat) {
-            const findMess = item.messages.find(el => el.id === body.messId[0])
-            if (findMess) {
-                resultChat = item
-                break
-            }
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             newMess = resultChat.messages.filter(el => el.id !== body.messId[0])
-            await this.chatModel.findOneAndUpdate({id: resultChat.id}, {messages: newMess}, {new: true})
+            const newMessCount = resultChat.messCount.map(el => {
+                const findReadStatus = body.readStatus.find(element => element.user === el.user)
+                if (findReadStatus) {
+                    if (findReadStatus.read === true) {
+                        return {
+                            user: el.user,
+                            countMess: el.countMess,
+                        }
+                    } else {
+                        return {
+                            user: el.user,
+                            countMess: el.countMess - 1,
+                        }
+                    }
+                }
+            })
+            if (newMess.length !== 0) {
+                await this.chatModel.findOneAndUpdate({id: resultChat.id}, {messages: newMess, messCount: newMessCount}, {new: true})
+                for (let item of resultChat.users) {
+                    if (item !== body.email) {
+                        const findUser = await this.userModel.findOne({email: item})
+                        if (findUser) {
+                            const unreadCount = newMessCount.find(el => el.user === item)
+                            for (let socket of findUser.socket) {
+                                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'delete', user: {email: body.trueParamEmail, name: '', sender: body.email}, text: '', photos: [], id:  body.messId, ans: '', socketId: '', readStatus: unreadCount.countMess}})
+                            }
+                        }
+                    }
+                }
+            } else {
+                await this.chatModel.findOneAndDelete({id: resultChat.id})
+            }
         }
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
 
@@ -1160,17 +1271,6 @@ export class UsersServiceService {
         if (deletePhotoId.length !== 0) {
             for (let item of deletePhotoId) {
                 await this.photoHighModel.findOneAndDelete({id: item})
-            }
-        }
-
-        for (let item of resultChat.users) {
-            if (item !== body.email) {
-                const findUser = await this.userModel.findOne({email: item})
-                if (findUser) {
-                    for (let socket of findUser.socket) {
-                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'delete', user: {email: body.trueParamEmail, name: '', sender: body.email}, text: '', photos: [], id:  body.messId, ans: '', socketId: '', readStatus: body.unreadCount}})
-                    }
-                }
             }
         }
 
@@ -1190,33 +1290,17 @@ export class UsersServiceService {
     }
 
     async messCount(body: EmailAndTrueParamEmail) {
-        const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        const resultChat = findChat[0]
+        const resultChat = await this.getChat(body.trueParamEmail, body.email)
+        console.log(`Email: ${body.email}`)
         if (resultChat) {
-            return resultChat.messCount.find(el => el.user === body.email).countMess
+            return resultChat.messCount
         } else {
-            return 0
+            return [{user: body.trueParamEmail, countMess: 0}, {user: body.email, countMess: 0}]
         }
     }
 
     async editMess(body: {email: string, trueParamEmail: string, editMess: string, inputMess: string, per: string, text: {user: string, message: EncryptMess[]}[]}) {
-        const findMe = await this.userModel.findOne({email: body.email})
-        let findChat: any = ''
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        if (isUserSearch) {
-            findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail})
-            findChat = [chatUser]
-        }
-        let resultChat: any = ''
-        for (let item of findChat) {
-            const findMess = item.messages.find(el => el.id === body.editMess)
-            if (findMess) {
-                resultChat = item
-                break
-            }
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             const messNew = resultChat.messages.map(el => {
                 if (body.editMess === el.id) {
@@ -1284,13 +1368,7 @@ export class UsersServiceService {
     }
 
     async pinChat(body: {user: string, pin: boolean, email: string}) {
-        const findFriend = await this.userModel.findOne({email: body.user})
-        const findMe = await this.userModel.findOne({email: body.email})
-        const findChat = await this.chatFindEmail(body.email, body.user)
-        let resultChat: any = ''
-        if (findMe && findFriend) {
-            resultChat = findChat.find(el => findMe.messages.includes(el.id) && findFriend.messages.includes(el.id))
-        }
+        const resultChat = await this.getChat(body.email, body.user)
         if (resultChat) {
             const pinChatNew = resultChat.pin.map(el => {
                 if (el.user === body.email) {
@@ -1307,15 +1385,7 @@ export class UsersServiceService {
     }
 
     async pinMess(body: {email: string, trueParamEmail: string, messId: string, pin: boolean}) {
-        const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        let resultChat: any = ''
-        for (let item of findChat) {
-            const findMess = item.messages.find(el => el.id === body.messId[0])
-            if (findMess) {
-                resultChat = item
-                break
-            }
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             const newMess = resultChat.messages.map(el => {
                 if (el.id === body.messId) {
@@ -1364,8 +1434,7 @@ export class UsersServiceService {
     }
 
     async changeNofifs(body: {notifs: boolean, trueEmail: string, user: string}) {
-        const findChat = await this.chatFindEmail(body.trueEmail, body.user)
-        const resultChat = findChat[0]
+        const resultChat = await this.getChat(body.trueEmail, body.user)
         if (resultChat) {
             const notifsChatNew = resultChat.notifs.map(el => {
                 if (body.trueEmail === el.user) {
@@ -1595,23 +1664,21 @@ export class UsersServiceService {
     }
 
     async deleteChat(body: {email: string, friendEmail: string, friendDel: boolean}) {
-        const findChat = await this.chatFindEmail(body.email, body.friendEmail)
-        let deleteId: string[] = []
-        for (let item of findChat) {
-            deleteId = [...deleteId, item.id]
-        }
         const findUser = await this.userModel.findOne({email: body.email})
         if (findUser) {
-            const chatsUserNew = await this.deleteChatUser(findUser, deleteId)
-            await this.userModel.findOneAndUpdate({email: body.email}, {messages: chatsUserNew}, {new: true})
-            if (body.friendDel) {
-                for (let chat of findChat) {
-                    await this.chatModel.findOneAndDelete({id: chat.id})
-                }
-                const findFriend = await this.userModel.findOne({email: body.friendEmail})
-                if (findFriend) {
-                    const chatsFriendNew = await this.deleteChatUser(findFriend, deleteId)
-                    await this.userModel.findOneAndUpdate({email: body.friendEmail}, {messages: chatsFriendNew}, {new: true})
+            const resultChat = await this.getChat(body.email, body.friendEmail)
+            if (!body.friendDel) {
+                const newMessages = resultChat.messages.map(el => {
+                    const resultUsers = el.users.filter(el => el !== body.email)
+                    return {
+                        ...el,
+                        users: resultUsers,
+                    }
+                })
+                await this.chatModel.findOneAndUpdate({id: resultChat.id}, {messages: newMessages}, {new: true})
+            } else {
+                if (resultChat.users.length < 3) {
+                    await this.chatModel.findOneAndDelete({id: resultChat.id})
                 }
             }
         }
@@ -1659,6 +1726,8 @@ export class UsersServiceService {
 
     async getFriendMessCount(body: {email: string, trueParamEmail: string}) {
         const messCountFriend = await this.messCount({email: body.trueParamEmail, trueParamEmail: body.email})
+        console.log('Mess count: ')
+        console.log(messCountFriend)
         return messCountFriend
     }
 
@@ -1675,7 +1744,7 @@ export class UsersServiceService {
         const findFriend = await this.userModel.findOne({email: body.trueParamEmail})
         if (findFriend) {
             for (let socket of findFriend.socket) {
-                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'openChat', user: body.email, text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
+                this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'openChat', user: {email: body.trueParamEmail, name: '', sender: body.email}, text: '', photos: [], id:  '', ans: '', socketId: '', typeMess: '', per: '', pin: false}})
             }
         }
     }
@@ -1702,28 +1771,23 @@ export class UsersServiceService {
         }
     }
 
-    async getBigPhotos(body: {messId: string, email: string, trueParamEmail: string}) {
+    async getBigPhotos(body: {messId: string, email: string, trueParamEmail: string, photoId: string}) {
         const findUser = await this.userModel.findOne({email: body.email})
         if (findUser) {
-            const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-            const resultChat = findChat[0]
+            const resultChat = await this.getChat(body.email, body.trueParamEmail)
             if (resultChat) {
                 const findMess = resultChat.messages.find(el => el.id === body.messId)
                 if (findMess) {
-                    const archive = archiver('zip')
-                    const bigPhotosId = findMess.photos.map(photo => photo.id)
-                    let bigPhotoBuffers: Buffer[] = []
-                    for (let item of bigPhotosId) {
-                        const findBuffer = await this.photoHighModel.findOne({id: item})
-                        if (findBuffer) {
-                            bigPhotoBuffers = [...bigPhotoBuffers, findBuffer.photo]
+                    const bigPhotoId = findMess.photos.find(el => el.id === body.photoId).id
+                    let bigPhotoBuffer: Buffer | string = ''
+                    const findBuffer = await this.photoHighModel.findOne({id: bigPhotoId})
+                    if (findBuffer) {
+                        bigPhotoBuffer = findBuffer.photo
+                        return {
+                            id: findBuffer.id,
+                            photo: bigPhotoBuffer,
                         }
                     }
-                    bigPhotoBuffers.forEach((bigPhoto, index) => {
-                        archive.append(bigPhoto, {name: `${index}`})
-                    })
-                    archive.finalize()
-                    return archive
                 }
             }
         }
@@ -1782,15 +1846,7 @@ export class UsersServiceService {
     }
 
     async messLength(body: {email: string, trueParamEmail: string}) {
-        let resultChat: any = ''
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        if (isUserSearch) {
-            const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-            resultChat = findChat[0]
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail})
-            resultChat = chatUser
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             return resultChat.messages.length
         } else {
@@ -1799,8 +1855,7 @@ export class UsersServiceService {
     }
 
     async getBigPhoto(body: {email: string, trueParamEmail: string, messId: string, photoId: string}) {
-        const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        const resultChat = findChat[0]
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             const message = resultChat.messages.find(el => el.id === body.messId)
             if (message) {
@@ -2030,16 +2085,14 @@ export class UsersServiceService {
     }
 
     async getChatId(body: EmailAndTrueParamEmail) {
-        const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        const resultChat = findChat[0]
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
             return resultChat.id
         }
     }
 
     async getNotifsMess(body: EmailAndTrueParamEmail) {
-        const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-        const resultChat = findChat[0]
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         const myStatusNotifs = resultChat.notifs.find(el => el.user === body.email)
         return myStatusNotifs.notifs
     }
@@ -2059,17 +2112,205 @@ export class UsersServiceService {
     }
 
     async getNotifStatus(body: {email: string, trueParamEmail: string}) {
-        const isUserSearch = await this.isEmail(body.trueParamEmail)
-        let resultChat: any = ''
-        if (isUserSearch) {
-            const findChat = await this.chatFindEmail(body.email, body.trueParamEmail)
-            resultChat = findChat[0]
-        } else {
-            const chatUser = await this.chatModel.findOne({id: body.trueParamEmail}) 
-            resultChat = chatUser
-        }
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
         const notifUserStatus = resultChat.notifs.find(el => el.user === body.email)
         return notifUserStatus.notifs
+    }
+
+    async getUsersGroup(body: {email: string, trueParamEmail: string}) {
+        const resultChat = await this.getChat(body.email, body.trueParamEmail)
+        if (resultChat) {
+            if (resultChat.users.includes(body.email)) {
+                const usersGroup = resultChat.users
+                if (!resultChat.id.includes('@')) {
+                    return {
+                        usersGroup: usersGroup,
+                        admin: resultChat.admin,
+                    }
+                } else {
+                    return {
+                        usersGroup: usersGroup,
+                        admin: [],
+                    }
+                }
+            } else {
+                return {
+                    usersGroup: 'PART_ERR',
+                    admin: [],
+                }
+            }
+        } else {
+            return {
+                usersGroup: [body.email, body.trueParamEmail],
+                admin: [],
+            }
+        }
+    }
+
+    async deleteParticip(body: {email: string, trueParamEmail: string, particip: string}) {
+        const findChat = await this.chatModel.findOne({id: body.trueParamEmail})
+        if (findChat) {
+            const usersNew = findChat.users.filter(el => el !== body.particip)
+            await this.chatModel.findOneAndUpdate({id: findChat.id}, {users: usersNew}, {new: true})
+            return 'OK'
+        }
+    }
+
+    async addParticip(body: {email: string, trueParamEmail: string, particip: string}) {
+        const findChat = await this.chatModel.findOne({id: body.trueParamEmail})
+        if (findChat) {
+            if (findChat.admin?.includes(body.email)) {
+                const newParticip = [...findChat.users, body.particip]
+                if (findChat.messCount.find(el => el.user === body.particip) && findChat.notifs.find(el => el.user === body.particip) && findChat.pin.find(el => el.user === body.particip)) {
+                    await this.chatModel.findOneAndUpdate({id: findChat.id}, {users: newParticip}, {new: true})
+                } else {
+                    const newPin = [...findChat.pin, {user: body.particip, pin: false}]
+                    const newMessCount = [...findChat.messCount, {user: body.particip, countMess: 1}]
+                    const newNotifs = [...findChat.notifs, {user: body.particip, notifs: true}]
+                    await this.chatModel.findOneAndUpdate({id: findChat.id}, {users: newParticip, messCount: newMessCount, notifs: newNotifs, pin: newPin}, {new: true})
+                }
+                const findUser = await this.userModel.findOne({email: body.particip})
+                if (findUser) {
+                    const newUserMessages = [...findUser.messages, body.trueParamEmail]  
+                    await this.userModel.findOneAndUpdate({email: body.particip}, {messages: newUserMessages}, {new: true})   
+                    return 'OK'      
+                }
+            }
+        }
+    }
+
+    async chatExit(body: {email: string, trueParamEmail: string}) {
+        const findChat = await this.chatModel.findOne({id: body.trueParamEmail})
+        if (findChat) {
+            const newParticip = findChat.users.filter(el => el !== body.email)
+            const findUser = await this.userModel.findOne({email: body.email})
+            if (findUser) {
+                const messagesUser = findUser.messages.filter(el => el !== findChat.id)
+                await this.userModel.findOneAndUpdate({email: body.email}, {messages: messagesUser}, {new: true})
+                if (findChat.admin?.includes(body.email)) {
+                    const randomNum = Math.floor(Math.random() * newParticip.length)
+                    const adminNew = newParticip[randomNum] 
+                    await this.chatModel.findOneAndUpdate({id: findChat.id}, {users: newParticip, admin: adminNew}, {new: true})
+                } else {
+                    await this.chatModel.findOneAndUpdate({id: findChat.id}, {users: newParticip}, {new: true})
+                }
+                return 'OK'
+            }
+        }
+    }
+
+    async avatarChat(body: {email: string, trueParamEmail: string, ava: Express.Multer.File}) {
+        const chatUser = await this.chatModel.findOne({id: body.trueParamEmail}) 
+        if (chatUser) {
+            if (chatUser.admin?.includes(body.email)) {
+                const findAva = await this.groupAva.findOne({id: chatUser.avatar}) 
+                const avaBuffer = await sharp(body.ava.buffer)
+                    .resize(70, 70) 
+                    .jpeg({quality: 40})
+                    .png()
+                    .toBuffer()
+
+                const base64 = avaBuffer.toString('base64')
+                const resultAvatar = `data:image/png;base64,${base64}`
+
+                if (findAva) {
+                    await this.groupAva.findOneAndUpdate({id: chatUser.avatar}, {avatar: resultAvatar}, {new: true})
+                } else {
+                    const id = uuidv4()
+                    const avatarGroup = new this.groupAva({id: id, avatar: resultAvatar})
+                    await avatarGroup.save()
+                    await this.chatModel.findOneAndUpdate({id: body.trueParamEmail}, {avatar: id}, {new: true})
+                }
+            }
+        }
+    }
+
+    async reactions(body: {email: string, reactionsMess: {reaction: string, users: string[]}[], messEmojies: string, trueParamEmail: string}) {
+        const findChat = await this.getChat(body.email, body.trueParamEmail)
+        if (findChat) {
+            const newMessages = findChat.messages.map(el => {
+                if (el.id === body.messEmojies) {
+                    return {
+                        ...el,
+                        reactions: body.reactionsMess,
+                    }
+                }
+            })
+            await this.chatModel.findOneAndUpdate({id: findChat.id}, {messages: newMessages}, {new: true})
+        }
+        for (let item of findChat.users) {
+            if (item !== body.email) {
+                const findUser = await this.userModel.findOne({email: item})
+                if (findUser) {
+                    for (let socket of findUser.socket) {
+                        this.socketGateway.handleNewMessage({targetSocket: socket, message: {type: 'reaction', user: {email: body.trueParamEmail, name: '', sender: body.email}, text: '', photos: [], id: body.messEmojies, ans: '', socketId: '', readStatus: 0, reactions: body.reactionsMess}})
+                    }
+                }
+            }
+        }
+    }
+
+    async previewPhoto(body: {email: string, messId: string, trueParamEmail: string, indexPhoto: number}) {
+        const findChat = await this.getChat(body.email, body.trueParamEmail)
+        if (findChat) {
+            const messageWithPhoto = findChat.messages.find(el => el.id === body.messId)
+            const photo = messageWithPhoto.photos.find((el, index) => index === body.indexPhoto)
+            return photo.base64
+        }
+    }
+
+    async voteUser(body: {email: string, messId: string, trueParamEmail: string, voteId: string}) {
+        const findChat = await this.getChat(body.email, body.trueParamEmail)
+        if (findChat) {
+            const newMess = findChat.messages.map(el => {
+                if (el.id === body.messId) {
+                    const newVotes = el.votes.map(element => {
+                        if (element.id === body.voteId) {
+                            return {
+                                ...element,
+                                users: [...element.users, body.email]
+                            }
+                        } else {
+                            return element
+                        }
+                    })
+                    return {
+                        ...el,
+                        votes: newVotes,
+                    }
+                } else {
+                    return el
+                }
+            })
+            await this.chatModel.findOneAndUpdate({id: findChat.id}, {messages: newMess}, {new: true})
+        }
+    }
+
+    async voiceRevoke(body: {email: string, messId: string, trueParamEmail: string}) {
+        const findChat = await this.getChat(body.email, body.trueParamEmail)
+        if (findChat) {
+            const newMess = findChat.messages.map(el => {
+                if (el.id === body.messId) {
+                    const newVotes = el.votes.map(element => {
+                        if (element.users.includes(body.email)) {
+                            return {
+                                ...element,
+                                users: element.users.filter(user => user !== body.email)
+                            }
+                        } else {
+                            return element
+                        }
+                    })
+                    return {
+                        ...el,
+                        votes: newVotes,
+                    }
+                } else {
+                    return el
+                }
+            })
+            await this.chatModel.findOneAndUpdate({id: findChat.id}, {messages: newMess}, {new: true})
+        }
     }
 
 }
