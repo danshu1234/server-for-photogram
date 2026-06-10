@@ -13,6 +13,8 @@ import { User } from './testing-users/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RedisModule } from './redis.module';
+import { ChatsModule } from './chats/chats.module';
+import { AuthorizationModule } from './authorization/authorization.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { RedisModule } from './redis.module';
     }),
     ScheduleModule.forRoot({}),
     RedisModule,
+    ChatsModule,
+    AuthorizationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

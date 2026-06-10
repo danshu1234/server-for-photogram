@@ -1,7 +1,5 @@
 import { Controller, Get, Body, Post, Param, Patch, UseInterceptors, UploadedFiles, UseGuards, Request, Res, UploadedFile } from '@nestjs/common';
 import { UsersServiceService } from 'src/users-service/users-service.service';
-import Message from 'src/Message';
-import EmailAndTrueParamEmail from 'src/emailInterface';
 import { EmailDto } from 'src/EmailDto';
 import { UserDto } from './UserDto';
 import { NewUserDto } from 'src/NewUserDto';
@@ -14,15 +12,11 @@ import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 import { messIdAndTrueParamEmail } from 'src/messIdInter';
 import EncryptMess from 'src/MessEncryptInterface';
 
-@Controller('users-controller')export class UsersControllerController {
+@Controller('users-controller')
+export class UsersControllerController {
 
     constructor(private readonly UsersService: UsersServiceService){}
 
-
-    @Post('enter')
-    enter(@Body() body: {login: string, password: string, mobile?: string}, @Res({ passthrough: true }) response: Response) {
-        return this.UsersService.enter(body, response)
-    }
 
     @Get('check/find/user/:email')
     checkFindUser(@Param('email') email: string) {
@@ -202,144 +196,6 @@ import EncryptMess from 'src/MessEncryptInterface';
         return this.UsersService.getUserData(email)
     }
 
-    @Get('get/chats')
-    @UseGuards(CookieJwtGuard)
-    getChats(@Request() req) {
-        return this.UsersService.getChats(req.user.email)
-    }
-
-    @Post('get/mess')
-    @UseGuards(CookieJwtGuard)
-    getMess(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        return this.UsersService.getMess(body)
-    }
-
-    @Patch('new/mess')  
-    @UseGuards(CookieJwtGuard)
-    @UseInterceptors(FilesInterceptor('photo'))
-    newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, previewVideo?: string, options?: string}, @Request() req) {
-        let resultData: any = ''
-        if (body.options) {
-            resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans), options: JSON.parse(body.options)}
-        } else {
-            if (body.type !== 'video' && body.type !== 'voice') {
-                resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans)}
-            } else {
-                resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo, ans: JSON.parse(body.ans)}
-            }
-        }
-        return this.UsersService.newMess(resultData)
-    }
-    
-    @Patch('new/chat')
-    @UseGuards(CookieJwtGuard)
-    @UseInterceptors(FilesInterceptor('photo'))
-    newChat(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, users: string, videoId?: string, groupName?: string}, @Request() req) {
-        const resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), users: JSON.parse(body.users), ans: JSON.parse(body.ans)}
-        return this.UsersService.newChat(resultData)
-    }
-
-    @Patch('zero/mess')
-    @UseGuards(CookieJwtGuard)
-    zeroMess(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        this.UsersService.zeroMess(body)
-    }
-
-    @Post('typing')
-    @UseGuards(CookieJwtGuard)
-    typing(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        this.UsersService.typingUser(body)
-    }
-
-    @Get('get/ban/mess/:trueParamEmail')
-    getBanMess(@Param('trueParamEmail') trueParamEmail: string) {
-        return this.UsersService.getBanMess(trueParamEmail)
-    }
-
-    @Get('get/my/ban/mess')
-    @UseGuards(CookieJwtGuard)
-    getMyBanMess(@Request() req) {
-        return this.UsersService.getBanMess(req.user.email)
-    }
-
-    @Patch('ban/unban/user')
-    @UseGuards(CookieJwtGuard)
-    banUser(@Body() data: {trueParamEmail: string, banStatus: boolean}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, banStatus: data.banStatus, email: req.user.email}
-        this.UsersService.banUser(body)
-    }
-
-    @Patch('delete/mess')
-    @UseGuards(CookieJwtGuard)
-    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], readStatus: {user: string, read: boolean}[]}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, readStatus: data.readStatus}
-        return this.UsersService.deleteMess(body)
-    }
-
-    @Post('get/mess/count')
-    messCount(@Body()  body: EmailAndTrueParamEmail) {
-        return this.UsersService.messCount(body)
-    }
-
-    @Patch('edit/mess')
-    @UseGuards(CookieJwtGuard)
-    editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, text: string, myText: string}, @Request() req) {
-        console.log('Text: ')
-        const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: req.user.email, text: JSON.parse(data.text)}
-        return this.UsersService.editMess(body)
-    }
-
-    @Get('get/perm/mess')
-    @UseGuards(CookieJwtGuard)
-    getPerm(@Request() req) {
-        return this.UsersService.getPerm(req.user.email)
-    }
-
-    @Patch('new/perm/mess')
-    @UseGuards(CookieJwtGuard)
-    newMessPerm(@Body() data: {changePerm: string}, @Request() req) {
-        const body = {changePerm: data.changePerm, email: req.user.data}
-        this.UsersService.newMessPerm(body)
-    }
-
-    @Post('get/perm/data')
-    @UseGuards(CookieJwtGuard)
-    getPermData(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        return this.UsersService.getPermData(body)
-    }
-
-    @Post('start/voice')
-    @UseGuards(CookieJwtGuard)
-    startVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        this.UsersService.startVoice(body)
-    }
-
-    @Post('stop/voice')
-    @UseGuards(CookieJwtGuard)
-    stopVoice(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {trueParamEmail: data.trueParamEmail, email: req.user.email}
-        this.UsersService.stopVoice(body)
-    }
-
-    @Patch('pin/chat')
-    @UseGuards(CookieJwtGuard)
-    pinChat(@Body() data: {user: string, pin: boolean}, @Request() req) {
-        const body = {user: data.user, pin: data.pin, email: req.user.email}
-        this.UsersService.pinChat(body)
-    }
-
-    @Patch('pin/mess')
-    @UseGuards(CookieJwtGuard)
-    pinMess(@Body() data: {trueParamEmail: string, messId: string, pin: boolean}, @Request() req) {
-        const body = {...data, email: req.user.email}
-        return this.UsersService.pinMess(body)
-    }
-
     @Get('get/save/posts/:email')
     getSavePosts(@Param('email') email: string) {
         return this.UsersService.getSavePosts(email)
@@ -355,18 +211,6 @@ import EncryptMess from 'src/MessEncryptInterface';
         this.UsersService.changeCode(body)
     }
 
-    @Get('get/mess/count/:email')
-    getMessCount(@Param('email') email: string) {
-        return this.UsersService.getMessCount(email)
-    }
-
-    @Patch('change/notifs')
-    @UseGuards(CookieJwtGuard)
-    changeNotifs(@Body() data: {notifs: boolean, user: string}, @Request() req) {
-        const body = {notifs: data.notifs, user: data.user, trueEmail: req.user.email}
-        this.UsersService.changeNofifs(body)
-    }
-
     @Get('get/visits/:email')
     getMyVisits(@Param('email') email: string) {
         return this.UsersService.getMyVisits(email)
@@ -375,26 +219,6 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Post('validate/email')
     validateEmail(@Body() body: EmailDto) {
         return body.email
-    }
-
-    @Post('send/code')
-    sendCode(@Body() body: NewUserDto) {
-        return this.UsersService.sendCode(body)
-    }
-
-    @Post('reg/user')
-    regUser(@Body() body: CreateUser, @Res({ passthrough: true }) response: Response) {
-        return this.UsersService.regUser(body, response)
-    }
-
-    @Post('send/enter/code/:email') 
-    sendEnterCode(@Param('email') email: string) {
-        return this.UsersService.sendEnterCode(email)
-    }
-
-    @Post('email/enter')
-    emailEnter(@Body() body: {email: string, code: string}) {
-        return this.UsersService.emailEnter(body)
     }
 
     @Post('check/token')
@@ -417,29 +241,6 @@ import EncryptMess from 'src/MessEncryptInterface';
         return this.UsersService.dataForCall(body)
     }
 
-    @Get('google')
-    @UseGuards(AuthGuard('google'))
-    async googleAuth() {}
-
-    @Get('google/auth')
-    @UseGuards(AuthGuard('google'))
-        async googleAuthRedirect(@Request() req, @Res() res: Response) {
-        const token = req.user.token
-        const refreshToken = req.user.refreshToken
-        const regStatus = req.user.reg
-        const userEmail = req.user.email
-        res.cookie('accessToken', token, {
-            httpOnly: true,
-            sameSite: 'strict',
-            maxAge: 60 * 60 * 1000, 
-        });
-        res.redirect(`http://localhost:3000/auth/${refreshToken}/${regStatus}/${userEmail}`);
-    }
-
-    @Patch('get/new/token')
-    getNewToken(@Body() body: {refreshToken: string}, @Res({ passthrough: true }) response: Response) {
-        return this.UsersService.getNewToken(body, response)
-    }
 
     @Patch('delete/avatar')
     @UseGuards(CookieJwtGuard)
@@ -457,19 +258,6 @@ import EncryptMess from 'src/MessEncryptInterface';
             maxAge: 60 * 60 * 1000, 
         });
         return res.status(200).send()
-    }
-
-    @Patch('delete/chat')
-    @UseGuards(CookieJwtGuard)
-    deleteChat(@Body() data: {friendEmail: string, friendDel: boolean}, @Request() req) {
-        const body = {email: req.user.email, friendEmail: data.friendEmail, friendDel: data.friendDel}
-        return this.UsersService.deleteChat(body)
-    }
-
-    @Get('get/bot/mess')
-    @UseGuards(CookieJwtGuard)
-    getBotMess(@Request() req) {
-        return this.UsersService.getBotMess(req.user.email)
     }
 
     @Get('check/user/:email')
@@ -495,109 +283,6 @@ import EncryptMess from 'src/MessEncryptInterface';
         return this.UsersService.getStatusOnline(trueParamEmail)
     }
 
-    @Post('video')
-    @UseGuards(CookieJwtGuard)
-    async getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string}, @Request() req, @Res() res: Response) {
-        const body = {...data, email: req.user.email}
-        const archive = await this.UsersService.getVideoMess(body)
-        res.set({
-            'Content-Type': 'application/zip',
-            'Content-Disposition': 'attachment; filename="file"',
-        });
-        archive.pipe(res)
-    }
-    
-    @Post('get/friend/mess/count')
-    @UseGuards(CookieJwtGuard)
-    getFriendMessCount(@Body() data: {trueParamEmail: string}, @Request() req) {
-        console.log('Here')
-        const body = {...data, email: req.user.email}
-        return this.UsersService.getFriendMessCount(body)
-    }
-
-    @Post('read/mess')
-    readMess(@Body() body: {targetEmail: string}) {
-        this.UsersService.readMess(body)
-    }
-
-    @Post('open/chat')
-    @UseGuards(CookieJwtGuard)
-    openChat(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        this.UsersService.openChat(body)
-    }
-
-    @Post('get/file')
-    @UseGuards(CookieJwtGuard)
-    async getFile(@Body() data: messIdAndTrueParamEmail, @Request() req, @Res() res) {
-        const body = {...data, email: req.user.email}
-        const file = await this.UsersService.getFile(body)
-        res.set({
-            'Content-Type': file?.type,
-            'Content-Length': file?.file.length,
-            'Content-Disposition': 'attachment; filename="file"',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-        });
-        res.send(file?.file)
-    }
-
-    @Post('big/photos')
-    @UseGuards(CookieJwtGuard)
-    async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string, photoId: string}, @Request() req, @Res() res: Response) {
-        const body = {...data, email: req.user.email, photoId: data.photoId}
-        const photoBuffer = await this.UsersService.getBigPhotos(body)
-        if (photoBuffer) {
-            res.setHeader('Content-Type', 'image/jpeg/png')
-            res.setHeader('Content-Length', photoBuffer.photo.length)
-            res.setHeader('X-Metadata', JSON.stringify(photoBuffer.id))
-            return res.send(photoBuffer.photo)
-        }
-    }
-
-    @Post('public/keys')
-    @UseGuards(CookieJwtGuard)
-    getPublicKeys(@Body() body: {usersChat: string[]}) {
-        return this.UsersService.getPublicKeys(body.usersChat)
-    }
-
-    @Patch('add/public/key')
-    @UseGuards(CookieJwtGuard)
-    addPublicKey(@Body() data: {publicKey: string}, @Request() req) {
-        const body = {email: req.user.email, publicKey: data.publicKey}
-        return this.UsersService.addPublicKey(body)
-    }
-
-    @Post('mess/length')
-    @UseGuards(CookieJwtGuard)
-    getMessLength(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.messLength(body)
-    }
-
-    @Post('big/photo')
-    @UseGuards(CookieJwtGuard)
-    async getBigPhoto(@Body() data: {trueParamEmail: string, messId: string, photoId: string}, @Request() req, @Res() res: Response) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, photoId: data.photoId}
-        const resultBuffer = await this.UsersService.getBigPhoto(body)
-        res.setHeader('Content-Type', 'image/jpeg/png')
-        return res.send(resultBuffer)
-    }
-
-    @Get('get/token')
-    async getToken(@Request() req) {
-        const token = req.cookies?.accessToken
-        return token
-    }
-
-    @Get('change/token')
-    @UseGuards(CookieJwtGuard)
-    async changeToken(@Request() req, @Res({ passthrough: true }) response: Response) {
-        const email = req.user.email
-        return this.UsersService.changeToken(email, response)
-    }
-
     @Get('add/test/users')
     addTestUsers() {
         this.UsersService.addTestUsers()
@@ -606,16 +291,6 @@ import EncryptMess from 'src/MessEncryptInterface';
     @Get('get/popular/users')
     getPopularUsers() {
         return this.UsersService.getPopularUsers()
-    }
-
-    @Post('save/token')
-    saveToken(@Body() body: {accessToken: string}, @Res() res: Response) {
-        res.cookie('accessToken', body.accessToken, {
-            httpOnly: true,
-            sameSite: 'strict',
-            maxAge: 60 * 60 * 1000, 
-        });
-        return 'OK'
     }
 
     @Patch('new/user/notif')
@@ -629,16 +304,6 @@ import EncryptMess from 'src/MessEncryptInterface';
     @UseGuards(CookieJwtGuard)
     getPostNotifs(@Request() req) {
         return this.UsersService.getPostNotifs(req.user.email)
-    }
-
-    @Post('enter/test')
-    enterTest(@Body() body: {login: string, password: string}) {
-        return this.UsersService.enterTest(body)
-    }
-
-    @Post('get/email/test')
-    getEmailTest(@Body() body: {sessId: string}) {
-        return this.UsersService.getEmailTest(body.sessId)
     }
 
     @Post('close/sess/test')
@@ -656,102 +321,6 @@ import EncryptMess from 'src/MessEncryptInterface';
     getUserKeywords(@Request() req) {
         const email = req.user.email
         return this.UsersService.getUserKeywords(email)
-    }
-
-    @Post('chat/id')
-    @UseGuards(CookieJwtGuard)
-    getChatId(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.getChatId(body)
-    }
-
-    @Post('get/notif/mess')
-    @UseGuards(CookieJwtGuard)
-    getNotifsMess(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.getNotifsMess(body)
-    }
-
-    @Post('get/users/chat')
-    getChatUsers(@Body() body: {trueParamEmail: string}) {
-        return this.UsersService.getUsersChat(body.trueParamEmail)
-    }
-
-    @Get('chat/name/:id')
-    getChatName(@Param('id') id: string) {
-        return this.UsersService.getNameChat(id)
-    }
-
-    @Post('get/notif/status')
-    @UseGuards(CookieJwtGuard)
-    getNotifStatus(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.getNotifStatus(body)
-    }
-
-    @Post('get/group/users')
-    @UseGuards(CookieJwtGuard)
-    getUsersGroup(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.getUsersGroup(body)
-    }
-
-    @Patch('delete/particip')
-    @UseGuards(CookieJwtGuard)
-    deleteParticip(@Body() data: {trueParamEmail: string, particip: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, particip: data.particip}
-        return this.UsersService.deleteParticip(body)
-    }
-    
-    @Patch('add/new/particip')
-    @UseGuards(CookieJwtGuard)
-    addParticip(@Body() data: {trueParamEmail: string, particip: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, particip: data.particip}
-        return this.UsersService.addParticip(body)
-    }
-
-    @Patch('chat/exit')
-    @UseGuards(CookieJwtGuard)
-    chatExit(@Body() data: {trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail}
-        return this.UsersService.chatExit(body)
-    }
-
-    @Patch('group/new/avatar')
-    @UseGuards(CookieJwtGuard)
-    @UseInterceptors(FileInterceptor('ava'))
-    avatarChat(@Body() data: {id: string}, @UploadedFile() ava: Express.Multer.File, @Request() req) {
-        const resultEmail: string = req.user.email
-        const body = {email: resultEmail, trueParamEmail: data.id, ava: ava}
-        this.UsersService.avatarChat(body)
-    }
-
-    @Patch('new/reactions')
-    @UseGuards(CookieJwtGuard)
-    reactions(@Body() data: {reactionsMess: {reaction: string, users: string[]}[], messEmojies: string, trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, ...data}
-        this.UsersService.reactions(body)
-    }
-
-    @Post('preview/photo')
-    @UseGuards(CookieJwtGuard)
-    getPreviewPhoto(@Body() data: {messId: string, trueParamEmail: string, indexPhoto: number}, @Request() req) {
-        const body = {email: req.user.email, ...data}
-        return this.UsersService.previewPhoto(body)
-    }
-
-    @Patch('vote/user')
-    @UseGuards(CookieJwtGuard)
-    voteUser(@Body() data: {messId: string, trueParamEmail: string, voteId: string}, @Request() req) {
-        const body = {email: req.user.email, ...data}
-        this.UsersService.voteUser(body)
-    }
-
-    @Patch('voice/revoke')
-    @UseGuards(CookieJwtGuard)
-    voiceRevoke(@Body() data: {messId: string, trueParamEmail: string}, @Request() req) {
-        const body = {email: req.user.email, ...data}
-        this.UsersService.voiceRevoke(body)
     }
 
 

@@ -24,10 +24,10 @@ export class MobileControllerController {
       }
   }
 
-  @Patch('get/new/token')
-  getNewToken(@Body() body: {refreshToken: string, token: string}, @Res({ passthrough: true }) response: Response) {
-      return this.UsersService.getNewToken(body, response)
-  }
+  // @Patch('get/new/token')
+  // getNewToken(@Body() body: {refreshToken: string, token: string}, @Res({ passthrough: true }) response: Response) {
+  //     return this.UsersService.getNewToken(body, response)
+  // }
 
   @Post('get/email')
   async getUserEmail(@Body() body: {token: string}) {
@@ -35,11 +35,11 @@ export class MobileControllerController {
     return email
   }
 
-  @Post('get/chats')
-  async getChats(@Body() body: {token: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService)
-    return this.UsersService.getChats(email)
-  } 
+  // @Post('get/chats')
+  // async getChats(@Body() body: {token: string}) {
+  //   const email = await getEmailFromToken(body.token, this.jwtService)
+  //   return this.UsersService.getChats(email)
+  // } 
 
   @Patch('online/status')
   async onlineStatus(@Body() data: {userToken: string, plat: string}) {
@@ -63,26 +63,26 @@ export class MobileControllerController {
     this.UsersService.addSocket(body)
   }
 
-  @Post('get/mess')
-  async getMess(@Body() data: {token: string, trueParamEmail: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    return this.UsersService.getMess(body)
-  }
+  // @Post('get/mess')
+  // async getMess(@Body() data: {token: string, trueParamEmail: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   return this.UsersService.getMess(body)
+  // }
 
-  @Post('get/friend/mess/count')
-  async getFriendMessCount(@Body() data: {token: string, trueParamEmail: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    return this.UsersService.getFriendMessCount(body)
-  }
+  // @Post('get/friend/mess/count')
+  // async getFriendMessCount(@Body() data: {token: string, trueParamEmail: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   return this.UsersService.getFriendMessCount(body)
+  // }
 
-  @Patch('zero/mess')
-  async zeroMess(@Body() data: {token: string, trueParamEmail: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    this.UsersService.zeroMess(body)
-  }
+  // @Patch('zero/mess')
+  // async zeroMess(@Body() data: {token: string, trueParamEmail: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   this.UsersService.zeroMess(body)
+  // }
 
   // @Patch('delete/mess')
   // async deleteMess(@Body() data: {trueParamEmail: string, messId: string[], token: string, unreadCount: number}) {
@@ -91,13 +91,13 @@ export class MobileControllerController {
   //   return this.UsersService.deleteMess(body)
   // }
 
-  @Patch('new/mess')  
-  @UseInterceptors(FilesInterceptor('photo'))
-  async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, token: string, myText: string, dateSend?: string, hour?: string, minute?: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService)  
-    const resultData = {...body, files: files, email: email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
-    return this.UsersService.newMess(resultData)
-  }
+  // @Patch('new/mess')  
+  // @UseInterceptors(FilesInterceptor('photo'))
+  // async newMess(@UploadedFiles() files: any, @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, token: string, myText: string, dateSend?: string, hour?: string, minute?: string}) {
+  //   const email = await getEmailFromToken(body.token, this.jwtService)  
+  //   const resultData = {...body, files: files, email: email, text: JSON.parse(body.text), myText: JSON.parse(body.myText)}
+  //   return this.UsersService.newMess(resultData)
+  // }
 
   // @Patch('new/chat')
   // @UseInterceptors(FilesInterceptor('photo'))
@@ -107,53 +107,53 @@ export class MobileControllerController {
   //   return this.UsersService.newChat(resultData)
   // }
 
-  @Post('get/my/ban/mess')
-  async getMyBanMess(@Body() body: {token: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService)
-    return this.UsersService.getBanMess(email)
-  }
+  // @Post('get/my/ban/mess')
+  // async getMyBanMess(@Body() body: {token: string}) {
+  //   const email = await getEmailFromToken(body.token, this.jwtService)
+  //   return this.UsersService.getBanMess(email)
+  // }
 
-  @Post('typing')
-  async typing(@Body() data: {trueParamEmail: string, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)  
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    this.UsersService.typingUser(body)
-  }
+  // @Post('typing')
+  // async typing(@Body() data: {trueParamEmail: string, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)  
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   this.UsersService.typingUser(body)
+  // }
 
-  @Post('get/perm/data')
-  async getPermData(@Body() data: {trueParamEmail: string, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    return this.UsersService.getPermData(body)
-  }
+  // @Post('get/perm/data')
+  // async getPermData(@Body() data: {trueParamEmail: string, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   return this.UsersService.getPermData(body)
+  // }
 
-  @Patch('edit/mess')
-  async editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, token: string, text: string, myText: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: email, text: JSON.parse(data.text), myText: JSON.parse(data.myText)}
-    return this.UsersService.editMess(body)
-  }
+  // @Patch('edit/mess')
+  // async editMess(@Body() data: {trueParamEmail: string, editMess: string, inputMess: string, per: string, token: string, text: string, myText: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, editMess: data.editMess, inputMess: data.inputMess, per: data.per, email: email, text: JSON.parse(data.text), myText: JSON.parse(data.myText)}
+  //   return this.UsersService.editMess(body)
+  // }
     
-  @Post('start/voice')
-  async startVoice(@Body() data: {trueParamEmail: string, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    this.UsersService.startVoice(body)
-  }
+  // @Post('start/voice')
+  // async startVoice(@Body() data: {trueParamEmail: string, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   this.UsersService.startVoice(body)
+  // }
 
-  @Post('stop/voice')
-  async stopVoice(@Body() data: {trueParamEmail: string, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {trueParamEmail: data.trueParamEmail, email: email}
-    this.UsersService.stopVoice(body)
-  }
+  // @Post('stop/voice')
+  // async stopVoice(@Body() data: {trueParamEmail: string, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {trueParamEmail: data.trueParamEmail, email: email}
+  //   this.UsersService.stopVoice(body)
+  // }
 
-  @Patch('delete/chat')
-  async deleteChat(@Body() data: {friendEmail: string, friendDel: boolean, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, friendEmail: data.friendEmail, friendDel: data.friendDel}
-    return this.UsersService.deleteChat(body)
-  }
+  // @Patch('delete/chat')
+  // async deleteChat(@Body() data: {friendEmail: string, friendDel: boolean, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, friendEmail: data.friendEmail, friendDel: data.friendDel}
+  //   return this.UsersService.deleteChat(body)
+  // }
 
   // @Post('big/photos')
   // async getBigPhotos(@Body() data: {messId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
@@ -169,24 +169,24 @@ export class MobileControllerController {
   //   }
   // }
 
-  @Post('video')
-  async getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {...data, email: email}
-    const archive = await this.UsersService.getVideoMess(body)
-    res.set({
-        'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="file"',
-    });
-    archive.pipe(res)
-  }
+  // @Post('video')
+  // async getVideoMess(@Body() data: {videoMessId: string, trueParamEmail: string, token: string}, @Res() res: Response) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {...data, email: email}
+  //   const archive = await this.UsersService.getVideoMess(body)
+  //   res.set({
+  //       'Content-Type': 'application/zip',
+  //       'Content-Disposition': 'attachment; filename="file"',
+  //   });
+  //   archive.pipe(res)
+  // }
 
-  @Post('open/chat')
-  async openChat(@Body() data: {trueParamEmail: string, userToken: string}) {
-    const email = await getEmailFromToken(data.userToken, this.jwtService)
-    const body = {email: email, trueParamEmail: data.trueParamEmail}
-    this.UsersService.openChat(body)
-  }
+  // @Post('open/chat')
+  // async openChat(@Body() data: {trueParamEmail: string, userToken: string}) {
+  //   const email = await getEmailFromToken(data.userToken, this.jwtService)
+  //   const body = {email: email, trueParamEmail: data.trueParamEmail}
+  //   this.UsersService.openChat(body)
+  // }
 
   @Get('find/user/:emailUser')
   findUser(@Param('emailUser') user: string) {
@@ -213,11 +213,11 @@ export class MobileControllerController {
     return this.UsersService.newName(body)
   }
 
-  @Patch('get/bot/mess')
-  async getBotMess(@Body() body: {token: string}) {
-    const email = await getEmailFromToken(body.token, this.jwtService) 
-    return this.UsersService.getBotMess(email)
-  }
+  // @Patch('get/bot/mess')
+  // async getBotMess(@Body() body: {token: string}) {
+  //   const email = await getEmailFromToken(body.token, this.jwtService) 
+  //   return this.UsersService.getBotMess(email)
+  // }
 
   @Post('prompt')
   async userPrompt(@Body() data: {token: string, inputPrompt: string}) {
@@ -226,12 +226,12 @@ export class MobileControllerController {
     return this.openAIService.userPrompt(body)
   }
 
-  @Patch('add/public/key')
-  async addPublicKey(@Body() data: {publicKey: string, token: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, publicKey: data.publicKey}
-    return this.UsersService.addPublicKey(body)
-  }
+  // @Patch('add/public/key')
+  // async addPublicKey(@Body() data: {publicKey: string, token: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, publicKey: data.publicKey}
+  //   return this.UsersService.addPublicKey(body)
+  // }
 
   // @Post('public/keys/:email')
   // async getPublicKeys(@Param('email') userEmail: string, @Body() data: {token: string}) {
@@ -240,28 +240,28 @@ export class MobileControllerController {
   //   return this.UsersService.getPublicKeys(body)
   // }
 
-  @Post('get/file')
-  async getFile(@Body() data: {trueParamEmail: string, messId: string, token: string}, @Request() req, @Res() res) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-      const body = {...data, email: email}
-      const file = await this.UsersService.getFile(body)
-      res.set({
-          'Content-Type': file?.type,
-          'Content-Length': file?.file.length,
-          'Content-Disposition': 'attachment; filename="file"',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-      });
-      res.send(file?.file)
-  }
+  // @Post('get/file')
+  // async getFile(@Body() data: {trueParamEmail: string, messId: string, token: string}, @Request() req, @Res() res) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //     const body = {...data, email: email}
+  //     const file = await this.UsersService.getFile(body)
+  //     res.set({
+  //         'Content-Type': file?.type,
+  //         'Content-Length': file?.file.length,
+  //         'Content-Disposition': 'attachment; filename="file"',
+  //         'Cache-Control': 'no-cache, no-store, must-revalidate',
+  //         'Pragma': 'no-cache',
+  //         'Expires': '0'
+  //     });
+  //     res.send(file?.file)
+  // }
 
-  @Post('give/token')
-  async giveToken(@Body() data: {token: string, userSocket: string}) {
-    const email = await getEmailFromToken(data.token, this.jwtService)
-    const body = {email: email, userSocket: data.userSocket}
-    return this.UsersService.giveToken(body)
-  }
+  // @Post('give/token')
+  // async giveToken(@Body() data: {token: string, userSocket: string}) {
+  //   const email = await getEmailFromToken(data.token, this.jwtService)
+  //   const body = {email: email, userSocket: data.userSocket}
+  //   return this.UsersService.giveToken(body)
+  // }
 
   
 }

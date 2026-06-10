@@ -9,7 +9,6 @@ import { SocketModule } from './getaway.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config'; 
 import { PassportModule } from '@nestjs/passport';
-import { GoogleStrategy } from './google.strategy';
 import { TestingUser, TestingUserSchema } from './TestingUserSchema';
 import { Video, VideoSchema } from './VideoSchema';
 import { MobileControllerController } from './mobile.controller';
@@ -26,7 +25,7 @@ import { Chat, ChatSchema } from './ChatSchema';
 import { GroupAva, GroupAvaSchema } from './GroupAvaSchema';
 
 @Module({
-    providers: [UsersServiceService, GoogleStrategy, TestProcessor],
+    providers: [UsersServiceService, TestProcessor],
     controllers: [UsersControllerController, MobileControllerController],
     imports: [
         forwardRef(() => PhotosModule),
