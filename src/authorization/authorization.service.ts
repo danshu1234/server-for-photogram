@@ -36,7 +36,10 @@ export class AuthorizationService {
             await newRefreshToken.save()
             return {
                 accessToken: token,
-                refreshToken: refreshToken,
+                refreshToken: {
+                    refreshToken: refreshToken,
+                    email: email,
+                },
             }
         } else {
             return {
@@ -247,7 +250,10 @@ export class AuthorizationService {
                     const token = this.jwtService.sign({email: findThisUser.email})
                     return {
                         token: token,
-                        refreshToken: refreshToken,
+                        refreshToken: {
+                            refreshToken: refreshToken,
+                            email: findThisUser.email,
+                        },
                     }
                 }
             } else {
@@ -256,11 +262,15 @@ export class AuthorizationService {
         }
     }
 
-    async getNewToken(body: {refreshToken: string, token?: string}, response: any) {
-        const allRefreshTokens = await this.refreshTokensModel.find().lean()
+    async getNewToken(body: {refreshToken: {email: string, refreshToken: string}, token?: string}, response: any) {
+        const allRefreshTokens = await this.refreshTokensModel.aggregate([
+            {$match: {
+                'email': body.refreshToken.email,
+            }},
+        ])
         let resultRefreshToken: any = null
         for (let item of allRefreshTokens) {
-            const checkToken = await argon2.verify(item.token, body.refreshToken)
+            const checkToken = await argon2.verify(item.token, body.refreshToken.refreshToken)
             if (checkToken) {
                 resultRefreshToken = item
                 break
@@ -302,20 +312,22 @@ export class AuthorizationService {
             await this.addUser(userEmail, [], name, plat)
         }
         const tokens = await this.generateTokens(userEmail)
-        if (!findUser) {
-            return {
-                token: tokens.accessToken,
-                refreshToken: tokens.refreshToken,
-                reg: true,
-                email: userEmail,
+        if (typeof tokens.refreshToken !== 'string') {
+            if (!findUser) {
+                return {
+                    token: tokens.accessToken,
+                    refreshToken: tokens.refreshToken.refreshToken,
+                    reg: true,
+                    email: userEmail,
+                }
+            } else {
+                return {
+                    token: tokens.accessToken,
+                    refreshToken: tokens.refreshToken.refreshToken,
+                    reg: false,
+                    email: userEmail,
+                }  
             }
-        } else {
-            return {
-                token: tokens.accessToken,
-                refreshToken: tokens.refreshToken,
-                reg: false,
-                email: userEmail,
-            }  
         }
     }
 

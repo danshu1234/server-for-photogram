@@ -51,7 +51,8 @@ export class AuthorizationController {
   }
 
   @Patch('get/new/token')
-  getNewToken(@Body() body: {refreshToken: string}, @Res({ passthrough: true }) response: Response) {
+  getNewToken(@Body() data: {refreshToken: string}, @Res({ passthrough: true }) response: Response) {
+    const body = {...data, refreshToken: JSON.parse(data.refreshToken)}
     return this.authorizationService.getNewToken(body, response)
   }
 

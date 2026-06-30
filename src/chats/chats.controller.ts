@@ -191,8 +191,8 @@ export class ChatsController {
 
     @Patch('delete/mess')
     @UseGuards(CookieJwtGuard)
-    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], readStatus: {user: string, read: boolean}[]}, @Request() req) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, readStatus: data.readStatus}
+    deleteMess(@Body() data: {trueParamEmail: string, messId: string[], unreadMess: {user: string, unreadCount: number}[]}, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadMess: data.unreadMess}
         return this.chatsService.deleteMess(body)
     }
 

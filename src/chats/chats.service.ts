@@ -14,15 +14,26 @@ import EncryptMess from 'src/MessEncryptInterface';
 import * as sharp from 'sharp';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PlanMess, PlanMessDocument } from 'src/PlanMessSchema';
-import archiver from 'archiver';
+import * as archiver from 'archiver';
 import { emailAndMessIdAndTrueParamEmail } from 'src/messIdInter';
+import { Connection } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
 
 @Injectable()
 export class ChatsService {
 
     private bucket: GridFSBucket;
 
-    constructor(@InjectModel(Chat.name) private chatModel: Model<ChatDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, @InjectModel(GroupAva.name) private groupAva: Model<GroupAvaDocument>, private readonly socketGateway: SocketGateway, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>){}
+    constructor(@InjectModel(Chat.name) private chatModel: Model<ChatDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, @InjectModel(GroupAva.name) private groupAva: Model<GroupAvaDocument>, private readonly socketGateway: SocketGateway, @InjectModel(PhotoHigh.name) private photoHighModel: Model<PhotoHighDocument>, @InjectModel(PlanMess.name) private PlanMessModel: Model<PlanMessDocument>, @InjectConnection() private readonly connection: Connection){}
+
+    async onModuleInit() {
+        const db = this.connection.db
+        if (db) {
+            this.bucket = new GridFSBucket(db, {
+                bucketName: 'photosss',
+            })
+        }
+    }
 
     @Cron(CronExpression.EVERY_MINUTE)
     async checkPlanMess() {
@@ -189,7 +200,7 @@ export class ChatsService {
                 const findMessCount = chat.messCount.find(el => el.user === email)
                 const findMessNotifs = chat.notifs.find(el => el.user === email)
                 const resultMessages = chat.messages.map(el => {
-                    if (el.typeMess === 'text' || el.typeMess === 'vote') {
+                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call') {
                         const findMyMessText = el.text.find(element => element.user === email)
                         if (findMyMessText) {
                             return {
@@ -268,7 +279,7 @@ export class ChatsService {
                     } else {
                         resultText = ''
                     }
-                    if (el.typeMess === 'text' || el.typeMess === 'vote') {
+                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call' || el.typeMess === 'file') {
                         const findUserMess = el.text.find(element => element.user === body.email)
                         return {
                             ...el,
@@ -732,26 +743,31 @@ export class ChatsService {
         }
     }
 
-    async deleteMess(body: {email: string, trueParamEmail: string, messId: string[], readStatus: {user: string, read: boolean}[]}) {
+    async deleteMess(body: {email: string, trueParamEmail: string, messId: string[], unreadMess: {user: string, unreadCount: number}[]}) {
         let newMess: any = []
         let deleteVideoId: string[] = []
         let deletePhotoId: any[] = []
         const resultChat = await this.getChat(body.email, body.trueParamEmail)
         if (resultChat) {
-            newMess = resultChat.messages.filter(el => el.id !== body.messId[0])
+            newMess = resultChat.messages.map(el => {
+                if (body.messId.includes(el.id)) {
+                    if (el.typeMess === 'video') {
+                        deleteVideoId = [...deleteVideoId, el.text]
+                    }
+                    for (let photo of el.photos) {
+                        deletePhotoId = [...deletePhotoId, photo.id]
+                    }
+                    return false
+                } else {
+                    return el
+                }
+            }).filter(el => el !== false)
             const newMessCount = resultChat.messCount.map(el => {
-                const findReadStatus = body.readStatus.find(element => element.user === el.user)
-                if (findReadStatus) {
-                    if (findReadStatus.read === true) {
-                        return {
-                            user: el.user,
-                            countMess: el.countMess,
-                        }
-                    } else {
-                        return {
-                            user: el.user,
-                            countMess: el.countMess - 1,
-                        }
+                const unreadMess = body.unreadMess.find(element => element.user === el.user)
+                if (unreadMess) {
+                    return {
+                        user: el.user,
+                        countMess: el.countMess - unreadMess.unreadCount,
                     }
                 }
             })
