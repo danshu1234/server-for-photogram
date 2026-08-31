@@ -136,6 +136,8 @@ export class ChatsController {
     @UseGuards(CookieJwtGuard)
     @UseInterceptors(FilesInterceptor('photo'))
     newMess(@UploadedFiles() files: Express.Multer.File[], @Body() body: {user: string, text: string, date: string, id: string, ans: string, type: string, trueParamEmail: string, per: string, origUser: string, origId: string, origChatId: string, videoId?: string, previewVideo?: string, options?: string}, @Request() req) {
+        console.log('Orig chat: ')
+        console.log(body)
         let resultData: any = ''
         if (body.options) {
             resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans), options: JSON.parse(body.options)}
@@ -143,7 +145,7 @@ export class ChatsController {
             if (body.type !== 'video' && body.type !== 'voice') {
                 resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), ans: JSON.parse(body.ans)}
             } else {
-                resultData = {...body, files: files, email: req.user.email, text: body.text, myText: body.text, previewVideo: body.previewVideo, ans: JSON.parse(body.ans)}
+                resultData = {...body, files: files, email: req.user.email, text: JSON.parse(body.text), myText: body.text, previewVideo: body.previewVideo, ans: JSON.parse(body.ans)}
             }
         }
         return this.chatsService.newMess(resultData)
@@ -353,11 +355,16 @@ export class ChatsController {
 
     @Post('big/photo')
     @UseGuards(CookieJwtGuard)
-    async getBigPhoto(@Body() data: {trueParamEmail: string, messId: string, photoId: string}, @Request() req, @Res() res: Response) {
-        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, photoId: data.photoId}
-        const resultBuffer = await this.chatsService.getBigPhoto(body)
-        res.setHeader('Content-Type', 'image/jpeg/png')
-        return res.send(resultBuffer)
+    async bigPhotos(@Body() data: {trueParamEmail: string, messId: string, bigPhotoId: string[]}, @Request() req,  @Res() res: Response) {
+        const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, bigPhotoId: data.bigPhotoId}
+        const archive = await this.chatsService.bigPhotos(body)
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="photos_${data.messId}.zip"`,
+        });
+        if (archive) {
+            archive.pipe(res)
+        }
     }
 
 }

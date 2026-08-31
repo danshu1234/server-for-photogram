@@ -11,11 +11,8 @@ import { UsersServiceService } from 'src/users-service/users-service.service';
 import { HfInference } from '@huggingface/inference';
 import { ConfigService } from '@nestjs/config';
 import { RecPhoto, RecPhotoDocument } from 'src/RecPhotoSchema';
-
-interface Comment{
-    user: string,
-    comment: string,
-}
+import { v4 as uuidv4 } from 'uuid';
+import { Comment } from 'src/PhotoSchema';
 
 @Injectable()
 export class PhotosService {
@@ -308,7 +305,21 @@ export class PhotosService {
 
     async getComments(photoId: string) {
         const findPhoto = await this.photoModel.findOne({id: photoId})
-        return findPhoto?.comments
+        if (findPhoto) {
+            let resultAnswers: Comment[] = []
+            let resultComments: Comment[] = []
+            for (let item of findPhoto.comments) {
+                if ('typeComment' in item) {
+                    resultAnswers = [...resultAnswers, item]
+                } else {
+                    resultComments = [...resultComments, item]
+                }
+            }
+            return {
+                answers: resultAnswers,
+                comments: resultComments,
+            }
+        }
     }
 
     async addNewComment(body: {email: string, targetId: string, comment: string, type: string, commentId: string}) {
@@ -316,7 +327,7 @@ export class PhotosService {
         const findPhoto = await this.photoModel.findOne({id: body.targetId})
         if (findPhoto?.comments && findUser) {
             const prevComments = findPhoto.comments
-            const resultComments = [...prevComments, {user: findUser.email, comment: body.comment, userName: findUser.name, type: body.type, id: body.commentId}]
+            const resultComments = [...prevComments, {user: findUser.email, comment: body.comment, userName: findUser.name, type: body.type, id: body.commentId, answers: []}]
             await this.photoModel.findOneAndUpdate({id: body.targetId}, {comments: resultComments}, {new: true})
             return 'OK'
         }
@@ -354,13 +365,55 @@ export class PhotosService {
         if (findUser && findPhoto) {
             const newComments = findPhoto.comments.map(el => {
                 if (el.id === body.commentId) {
-                    return false
+                    if ('typeComment' in el) {
+                        return {
+                            id: el.id,
+                            type: '',
+                            user: '',
+                            comment: '',
+                            userName: '',
+                            typeComment: el.typeComment,
+                            answers: el.answers,
+                        }
+                    } else {
+                        return {
+                            id: el.id,
+                            type: '',
+                            user: '',
+                            comment: '',
+                            userName: '',
+                            answers: el.answers,
+                        }
+                    }
                 } else {
                     return el
                 }
-            }).filter(el => el !== false)
+            })
             await this.photoModel.findOneAndUpdate({id: body.photoId}, {comments: newComments}, {new: true})
             return 'OK'
+        }
+    }
+
+    async answComment(body: {email: string, photoId: string, commentId: string, comment: string, type: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        const findPhoto = await this.photoModel.findOne({id: body.photoId})
+        if (findPhoto && findUser) {
+            const findComment = findPhoto.comments.find(el => el.id === body.commentId) 
+            const id = uuidv4()
+            const newComment = {id: id, type: body.type, user: body.email, comment: body.comment, userName: findUser.name, answers: [], answerComment: findComment?.user, typeComment: 'answer'}
+            const newComments = findPhoto.comments.map(el => {
+                if (el.id === body.commentId) {
+                    return {
+                        ...el,
+                        answers: [...el.answers, id]
+                    }
+                } else {
+                    return el
+                }
+            })
+            const resultNewComments = [...newComments, newComment]
+            await this.photoModel.findOneAndUpdate({id: body.photoId}, {comments: resultNewComments}, {new: true})
+            return newComment
         }
     }
 

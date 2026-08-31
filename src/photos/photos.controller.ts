@@ -100,4 +100,11 @@ export class PhotosController {
         return this.PhotosService.deleteComment(body)
     }
 
+    @Patch('answ/comment')
+    @UseGuards(CookieJwtGuard)
+    answComment(@Body() data: {photoId: string, commentId: string, comment: string, type: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        return this.PhotosService.answComment(body)
+    }
+
 }

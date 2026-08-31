@@ -8,10 +8,12 @@ import { NewTestingUserSchema, NewTestingUser } from 'src/NewTestingUserShema';
 import { SocketModule } from '../getaway.module';
 import { UsersModule } from 'src/user.module';
 import { Video, VideoSchema } from 'src/VideoSchema';
+import { ExperimUser, ExperimUserSchema } from 'src/ExperimUserSchema';
+import { UsersResolver } from './testing-users.resolver';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), MongooseModule.forFeature([{name: NewTestingUser.name, schema: NewTestingUserSchema}]), SocketModule, UsersModule],
-  providers: [TestingUsersService],
+  imports: [TypeOrmModule.forFeature([User]), MongooseModule.forFeature([{name: NewTestingUser.name, schema: NewTestingUserSchema}, {name: ExperimUser.name, schema: ExperimUserSchema}]), SocketModule, UsersModule],
+  providers: [TestingUsersService, UsersResolver],
   controllers: [TestingUsersController],
 })
 export class TestingUsersModule {}

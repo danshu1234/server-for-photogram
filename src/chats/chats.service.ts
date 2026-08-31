@@ -200,7 +200,7 @@ export class ChatsService {
                 const findMessCount = chat.messCount.find(el => el.user === email)
                 const findMessNotifs = chat.notifs.find(el => el.user === email)
                 const resultMessages = chat.messages.map(el => {
-                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call') {
+                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call' || el.typeMess === 'file' || el.typeMess === 'geopos') {
                         const findMyMessText = el.text.find(element => element.user === email)
                         if (findMyMessText) {
                             return {
@@ -279,7 +279,7 @@ export class ChatsService {
                     } else {
                         resultText = ''
                     }
-                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call' || el.typeMess === 'file') {
+                    if (el.typeMess === 'text' || el.typeMess === 'vote' || el.typeMess === 'call' || el.typeMess === 'file' || el.typeMess === 'geopos') {
                         const findUserMess = el.text.find(element => element.user === body.email)
                         return {
                             ...el,
@@ -357,6 +357,7 @@ export class ChatsService {
         let previewId: string = uuidv4()
         let resultFiles: any[] = []
         if (resultData.per !== '') {
+            console.log('Here 1')
             const findOrigChat = await this.chatModel.findOne({id: resultData.origChatId})
             if (findOrigChat) {
                 const findMess = findOrigChat.messages.find(el => el.id === resultData.origId)
@@ -465,6 +466,8 @@ export class ChatsService {
                             }
                         }
                     } else if (resultData.type === 'voice') {
+                        console.log('Voice text: ')
+                        console.log(resultData.text)
                         resultMessage = [...resultChat.messages, {user: resultData.user, text: resultData.text, date: resultData.date, photos: [{id: previewId}], id: resultData.id, ans: resultData.ans, edit: false, typeMess: resultData.type, per: resultData.per, pin: false, users: resultChat.users, reactions: []}]
                     }
                 }
@@ -1322,6 +1325,22 @@ export class ChatsService {
                 return findHighPhoto?.photo
             }
         }
+    }
+
+    async bigPhotos(body: {email: string, trueParamEmail: string, messId: string, bigPhotoId: string[]}) {
+        let resultPhotos: Buffer[] = []
+        for (let item of body.bigPhotoId) {
+            const resultPhoto = await this.getBigPhotos({messId: body.messId, email: body.email, trueParamEmail: body.trueParamEmail, photoId: item})
+            if (resultPhoto) {
+                resultPhotos = [...resultPhotos, resultPhoto.photo]
+            }
+        }
+        const archive = archiver('zip')
+        resultPhotos.forEach((bigPhoto, index) => {
+            archive.append(bigPhoto, {name: `${index}`})
+        })
+        archive.finalize()
+        return archive
     }
 
 

@@ -13,13 +13,16 @@ export type PhotoDocument = Photo & Document;
 }
 
 @Schema()
-class Comment {
+export class Comment {
   @Prop({required: true})
   id: string;
   type: string;
   user: string;
   comment: string;
   userName: string;
+  answerComment?: string;
+  typeComment?: string;
+  answers: string[];
 }
 
 @Schema()

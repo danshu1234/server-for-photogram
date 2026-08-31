@@ -15,6 +15,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { RedisModule } from './redis.module';
 import { ChatsModule } from './chats/chats.module';
 import { AuthorizationModule } from './authorization/authorization.module';
+import { GraphQLModule } from '@nestjs/graphql'
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo'
 
 @Module({
   imports: [
@@ -22,7 +24,19 @@ import { AuthorizationModule } from './authorization/authorization.module';
       isGlobal: true,
     }),
     MongooseModule.forRootAsync({
-      imports: [ConfigModule],
+      imports: [
+        ConfigModule,
+        GraphQLModule.forRoot<ApolloDriverConfig>({
+            driver: ApolloDriver,
+            autoSchemaFile: 'schema.gql',  
+            playground: true,    
+            context: ({ req, res }) => ({
+              req,
+              res,
+              cookies: req.cookies,
+            })           
+        }),
+      ],
       useFactory: async (configService: ConfigService) => ({
         uri: configService.get<string>('MONGO_DB_URI_1'),
       }),
@@ -34,17 +48,28 @@ import { AuthorizationModule } from './authorization/authorization.module';
     SocketModule,
     OpenAIModule,
     TestingUsersModule,
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'db.sqlite',
-      entities: [User],
-      autoLoadEntities: true,
-      synchronize: true,
-    }),
     ScheduleModule.forRoot({}),
     RedisModule,
     ChatsModule,
     AuthorizationModule,
+        ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get('DB_HOST'),
+        port: configService.get<number>('DB_PORT', 5432),
+        username: configService.get('DB_USERNAME'),
+        password: configService.get('DB_PASSWORD'),
+        database: configService.get('DB_DATABASE'),
+        entities: [User],
+        synchronize: true, 
+        logging: true,
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],
