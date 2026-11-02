@@ -93,5 +93,12 @@ export class AuthorizationController {
     return 'OK'
   }
 
+  @Post('check/ban/user')
+  @UseGuards(CookieJwtGuard)
+  checkBanUser(@Request() req, @Res({ passthrough: true }) response: Response) {
+    const body = {email: req.user.email, response: response}
+    return this.authorizationService.checkBanUser(body)
+  }
+
 
 }

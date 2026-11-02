@@ -25,6 +25,7 @@ import { ExperimUser, ExperimUserDocument } from 'src/ExperimUserSchema';
 import OpenAI from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources/index';
 import { alphabet } from './testingUsers'
+import Groq from 'groq-sdk'
 
 @Injectable()
 export class TestingUsersService {
@@ -416,4 +417,54 @@ export class TestingUsersService {
         return resultFriends
     }
 
+    async correctText(body: {input: string}) {
+        const text = 'Нужно исправить в тексте орфографические ошибки и ошибки пунктуации, от тебя нужен только готовый текст, текст для исправления: ' + body.input
+        const model = 'groq/compound-mini'
+        const temperature = 0.7
+        const messages: ChatCompletionMessageParam[] = [{role: 'user', content: text}]
+        const completion = await this.client.chat.completions.create({
+            model,
+            messages,
+            temperature,
+        });
+        const resultText = completion.choices[0].message.content
+        return resultText
+    }
+
+    async getCities() {
+
+        const USERNAME = process.env.GEONAMES_USER;
+
+        if (USERNAME) {
+            const params = new URLSearchParams({
+                continentCode: 'EU',
+                featureClass: 'P',
+                orderby: 'population',
+                maxRows: '100',
+                lang: 'ru',
+                username: USERNAME,
+            });
+
+            const res = await fetch(`http://api.geonames.org/searchJSON?${params}`);
+            if (!res.ok) throw new Error(`GeoNames ${res.status}`);
+
+            const data = await res.json();
+            return data.geonames;
+        }
+    }
+
+    async rateCities(body: {coords: {latitude: number, longitude: number}[]}) {
+        let cities: {name: string, population: number}[] = []
+        for (let item of body.coords) {
+            const cityInfo = await fetch(`http://api.geonames.org/findNearbyPlaceNameJSON?lat=${item.latitude}&lng=${item.longitude}&username=danshu001&style=full`)
+            const resultCityInfo = await cityInfo.json()
+            const city = resultCityInfo.geonames[0]
+            console.log(city)
+            cities = [...cities, {name: city.name, population: city.population}]
+        }
+        cities.sort((a, b) => b.population - a.population)
+        const resultCities = cities.map(el => el.name) 
+        return resultCities
+    }
+    
 }

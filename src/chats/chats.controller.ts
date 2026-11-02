@@ -195,7 +195,7 @@ export class ChatsController {
     @UseGuards(CookieJwtGuard)
     deleteMess(@Body() data: {trueParamEmail: string, messId: string[], unreadMess: {user: string, unreadCount: number}[]}, @Request() req) {
         const body = {email: req.user.email, trueParamEmail: data.trueParamEmail, messId: data.messId, unreadMess: data.unreadMess}
-        return this.chatsService.deleteMess(body)
+        throw new Error()
     }
 
     @Post('get/mess/count')
@@ -366,5 +366,13 @@ export class ChatsController {
             archive.pipe(res)
         }
     }
+
+    @Post('get/photo/by/id')
+    @UseGuards(CookieJwtGuard)
+    getPhotoById(@Body() data: {trueParamEmail: string, messId: string, photoId: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        return this.chatsService.getPhotoById(body)
+    }
+    
 
 }

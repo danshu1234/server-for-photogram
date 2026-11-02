@@ -93,4 +93,19 @@ export class TestingUsersController {
         this.TestingUsersService.addFriends()
     }
 
+    @Post('correct/text')
+    correctText(@Body() body: {input: string}) {
+        return this.TestingUsersService.correctText(body)
+    }
+
+    @Get('get/cities')
+    getCities() {
+        return this.TestingUsersService.getCities()
+    }
+
+    @Post('rate/cities')
+    rateCities(@Body() body: {coords: {latitude: number, longitude: number}[]}) {
+        return this.TestingUsersService.rateCities(body)
+    }
+
 }   

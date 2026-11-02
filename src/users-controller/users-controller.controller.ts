@@ -11,6 +11,7 @@ import { Response } from 'express';
 import { CookieJwtGuard } from 'src/cookie-jwt.guard';
 import { messIdAndTrueParamEmail } from 'src/messIdInter';
 import EncryptMess from 'src/MessEncryptInterface';
+import { retryWhen } from 'rxjs';
 
 @Controller('users-controller')
 export class UsersControllerController {
@@ -323,5 +324,50 @@ export class UsersControllerController {
         return this.UsersService.getUserKeywords(email)
     }
 
+    @Patch('add/watch/photos')
+    addWatchPhotos() {
+        this.UsersService.addWatchPhotos()
+    }
+
+    @Get('get/call/status/:trueParamEmail')
+    @UseGuards(CookieJwtGuard)
+    getCallPerm(@Param('trueParamEmail') trueParamEmail: string, @Request() req) {
+        const body = {email: req.user.email, trueParamEmail: trueParamEmail}
+        return this.UsersService.getCallPerm(body)
+    }
+
+    @Get('get/my/ban/call/users')
+    @UseGuards(CookieJwtGuard)
+    getMyBanCallUsers(@Request() req) {
+        return this.UsersService.getMyBamCallUsers(req.user.email)
+    }
+
+    @Patch('change/call/perm')
+    @UseGuards(CookieJwtGuard)
+    changeCallPerm(@Body() data: {trueParamEmail: string, allow: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        this.UsersService.changeCallPerm(body)
+    }
+
+    @Post('get/chats/users')
+    getUsersChat(@Body() body: {userChats: string[]}) {
+        return this.UsersService.getUsersChat(body)
+    }
+
+    @Post('get/users/by/name')
+    getUsersByName(@Body() body: {nameInput: string}) {
+        return this.UsersService.getUsersByName(body)
+    }
+
+    @Get('get/subs/user')
+    @UseGuards(CookieJwtGuard)
+    getSubsUser(@Request() req) {
+        return this.UsersService.getSubsUser(req.user.email)
+    }
+
+    @Post('get/users/publish')
+    getUsersPublish(@Body() body: {resultUniqueUsers: string[]}) {
+        return this.UsersService.getUsersPublish(body)
+    }
 
 }

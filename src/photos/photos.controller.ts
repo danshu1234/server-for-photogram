@@ -19,7 +19,7 @@ export class PhotosController {
             file: file,
             data: body,
         }
-        this.PhotosService.createPhoto(photo)
+        return this.PhotosService.createPhoto(photo)
     }
 
     @Post('get/user/photos')
@@ -43,7 +43,7 @@ export class PhotosController {
         return this.PhotosService.unlikePhoto(body)
     }
 
-    @Post('all')
+    @Post('postsPhotos/all')
     @UseGuards(CookieJwtGuard)
     getAllPhotos(@Body() data: {start: number, finish: number}, @Request() req) {
         const body = {email: req.user.email, start: data.start, finish: data.finish}
@@ -90,7 +90,7 @@ export class PhotosController {
     @UseGuards(CookieJwtGuard)
     deletePhoto(@Body() data: {photoId: string}, @Request() req) {
         const body = {photoId: data.photoId, email: req.user.email}
-        this.PhotosService.deletePhoto(body)
+        return this.PhotosService.deletePhoto(body)
     }
 
     @Patch('delete/comment')
@@ -106,5 +106,41 @@ export class PhotosController {
         const body = {email: req.user.email, ...data}
         return this.PhotosService.answComment(body)
     }
+
+    @Post('postsText/all')
+    @UseGuards(CookieJwtGuard)
+    getPostsText(@Body() data: {start: number, finish: number}, @Request() req) {
+        const body = {email: req.user.email, start: data.start, finish: data.finish}
+        return this.PhotosService.getPostsText(body)
+    }
+
+    @Post('test/textPosts')
+    testTextPosts() {
+        this.PhotosService.testTextPosts()
+    }
+
+    @Get('get/user/text/posts')
+    @UseGuards(CookieJwtGuard)
+    getUserTextPosts(@Request() req) {
+        return this.PhotosService.getUserTextPosts(req.user.email)
+    }
+
+    @Get('get/text/post/:textPostId')
+    getTextPost(@Param('textPostId') textPostId: string) {
+        return this.PhotosService.getTextPost(textPostId)
+    }
+
+    @Post('create/text/post')
+    @UseGuards(CookieJwtGuard)
+    createTextPost(@Body() data: {header: string, text: string, date: string, id: string}, @Request() req) {
+        const body = {email: req.user.email, ...data}
+        return this.PhotosService.createTextPost(body)
+    }
+
+    @Get('explore/photo')
+    explorePhoto() {
+        this.PhotosService.explorePhotoInappropriateContent()
+    }
+
 
 }

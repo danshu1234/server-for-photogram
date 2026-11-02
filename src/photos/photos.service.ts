@@ -13,15 +13,20 @@ import { ConfigService } from '@nestjs/config';
 import { RecPhoto, RecPhotoDocument } from 'src/RecPhotoSchema';
 import { v4 as uuidv4 } from 'uuid';
 import { Comment } from 'src/PhotoSchema';
+import { pipeline, ImageClassificationPipeline, RawImage, env } from '@huggingface/transformers'
+import { ImageAnnotatorClient } from '@google-cloud/vision';
 
 @Injectable()
 export class PhotosService {
 
+    private visionClient = new ImageAnnotatorClient();
+    private classifier: ImageClassificationPipeline;
     private hf: HfInference;
 
     constructor(@InjectModel(Photo.name) private photoModel: Model<PhotoDocument>, @InjectModel(User.name) private userModel: Model<UserDocument>, private jwtService: JwtService, private readonly socketGateway: SocketGateway, @Inject(forwardRef(() => UsersServiceService)) private userService: UsersServiceService, private configService: ConfigService, @InjectModel(RecPhoto.name) private RecPhotoModel: Model<RecPhotoDocument>,) {}
 
-    onModuleInit() {
+    async onModuleInit() {
+
         const token = this.configService.get('HF_TOKEN');
         if (!token) {
             throw new Error('HF_TOKEN not found in .env');
@@ -56,6 +61,7 @@ export class PhotosService {
                 commentsPerm: photo.commentsPerm,
                 pin: photo.pin,
                 keyWords: photo.keyWords,
+                user: photo.user,
             }
         }))
         return resultPhotos
@@ -66,26 +72,60 @@ export class PhotosService {
         if (findUser) {
             const difPos = finish - start
             const allPhotosCount = await this.photoModel.aggregate([
+                {
+                    $match: {
+                        type: 'photo',
+                    }
+                },
                 {$group: {
                     _id: null,
                     count: {$sum: 1}
                 }},
             ])
             const targetPhotos = await this.photoModel.aggregate([
+                {
+                    $match: {
+                        type: 'photo',
+                    }
+                },
                 {$addFields: {
                     idNum: {$toLong: '$id'},
                 }},
                 {$sort: {idNum: -1}},
                 {$project: {idNum: 0}},
-                {$skip: start},
-                {$limit: difPos},
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "email",
+                        foreignField: "email",
+                        as: "user"
+                    }
+                },
+                { 
+                    $unwind: "$user" 
+                },
             ]).option({lean: true})
-            const resultPhotos = await this.addBase64Photo(targetPhotos)
+            const resultPhotos: any = await this.addBase64Photo(targetPhotos)
+            let subsPhotos: any[] = []
+            let unSubsPhotos: any[] = []
+            for (let item of resultPhotos) {
+                if (item.user.subscribes.includes(email)) {
+                    subsPhotos = [...subsPhotos, item]
+                } else {
+                    unSubsPhotos = [...unSubsPhotos, item]
+                }
+            }
+            console.log('ResultSubsAndUnsubsPhotos: ')
+            console.log([...subsPhotos, ...unSubsPhotos].map(el => el.id))
+            console.log(`Start: ${start}`)
+            console.log(`Finish: ${finish}`)
+            const resultSubsAndUnsubsPhotos = [...subsPhotos, ...unSubsPhotos].slice(start, finish)
+            console.log(resultSubsAndUnsubsPhotos.length)
             if (findUser.keyWords.length !== 0) {
                 let userLikePhoto: any[] = []
                 let userOtherPhoto: any[] = []
                 const userKeyWords = findUser.keyWords.map(el => el.label)
-                for (let item of resultPhotos) {
+                for (let item of resultSubsAndUnsubsPhotos) {
                     let userLike: boolean = false
                     for (let keyWord of item.keyWords) {
                         if (userKeyWords.includes(keyWord.label)) {
@@ -103,11 +143,13 @@ export class PhotosService {
                 return {
                     photos: resultUserPhotos,
                     allLength: allPhotosCount[0].count,
+                    nominalPhotoCount: resultSubsAndUnsubsPhotos.length,
                 }
             } else {
                 return {
-                    photos: resultPhotos,
+                    photos: resultSubsAndUnsubsPhotos,
                     allLength: allPhotosCount[0].count,
+                    nominalPhotoCount: resultSubsAndUnsubsPhotos.length,
                 }
             }
         }
@@ -124,14 +166,22 @@ export class PhotosService {
             .toBuffer()
         
         const uint8Array = new Uint8Array(buffer);
-        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
-        
-        const result = await this.hf.imageClassification({
-            model: 'microsoft/resnet-50',
-            data: blob,
+
+        const accountId = this.configService.get<string>('ACCOUNT_ID');
+        const token = this.configService.get<string>('CF_API_TOKEN');
+
+        const words = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/microsoft/resnet-50`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/octet-stream',
+            },
+            body: buffer as any,
         });
 
-        const resultWords = result.slice(0, 5)
+        const resultWords = await words.json()
+
+        const keyWords = resultWords.result.slice(0, 5)
 
         const myPhoto = new this.photoModel({
             id: photo.data.id,
@@ -143,7 +193,8 @@ export class PhotosService {
             comments: [],
             commentsPerm: true,
             pin: false,
-            keyWords: resultWords,
+            keyWords: keyWords,
+            type: 'photo',
         })
         await myPhoto.save()
 
@@ -160,7 +211,7 @@ export class PhotosService {
         const targetUser = await this.userModel.findOne({email: body.trueParamEmail})
             if (targetUser?.open === true || targetUser?.email === body.email || targetUser?.permUsers.includes(body.email)) {
                 const resultPhotos = await this.photoModel.find({email: targetUser?.email})
-                const finalPhotos = resultPhotos.reverse()
+                const finalPhotos = resultPhotos.reverse().filter(el => el.type === 'photo')
                 const resultUserPhotos = await Promise.all(finalPhotos.map(async photo => {
                 let buffer: Buffer | null = null
                 const signature = photo.url.toString('hex', 0, 8)
@@ -286,10 +337,32 @@ export class PhotosService {
     }
 
     async getAll(body: {email: string, start: number, finish: number}) {
-        let photosRecUser: any = null
-        const recPhoto = await this.sortRecPhotos(body.email, body.start, body.finish)
-        photosRecUser = {resultPhotos: recPhoto?.photos, allLength: recPhoto?.allLength}
-        return photosRecUser
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            let photosRecUser: any = null
+            const recPhoto = await this.sortRecPhotos(body.email, body.start, body.finish)
+            const resultPhotos = recPhoto?.photos.map(el => {
+                if (findUser.watchPhotos.includes(el.id) || el.likes.includes(body.email)) {
+                    return false
+                } else {
+                    return el
+                }
+            }).filter(el => el !== false)
+            if (resultPhotos) {
+                let newWatchPhotos: string[] = []
+                for (let item of resultPhotos) {
+                    const findOwnerPhoto = await this.userModel.findOne({email: item.email})
+                    if (findOwnerPhoto?.subscribes.includes(body.email)) {
+                        newWatchPhotos = [...newWatchPhotos, item.id]
+                    }
+                }
+                photosRecUser = {resultPhotos: resultPhotos, allLength: recPhoto?.allLength, nominalPhotoCount: recPhoto?.nominalPhotoCount}
+                const resultWatchPhotos = [...newWatchPhotos, ...findUser.watchPhotos]
+                await this.userModel.findOneAndUpdate({email: body.email}, {watchPhotos: resultWatchPhotos}, {new: true})
+                return photosRecUser
+            }
+            return {resultPhotos: recPhoto?.photos, allLength: recPhoto?.allLength, nominalPhotoCount: recPhoto?.nominalPhotoCount}
+        }
     }
 
     async getPhotoById(photoId: string) {
@@ -350,11 +423,11 @@ export class PhotosService {
     }
 
     async deletePhoto(body: {photoId: string, email: string}) {
-        const findUser = await this.userModel.findOne({email: body.email})
         const findPhoto = await this.photoModel.findOne({id: body.photoId})
-        if (findUser && findPhoto) {
-            if (findUser.email === findPhoto.email) {
-                await this.photoModel.findOneAndDelete({id: body.photoId})
+        if (findPhoto) {
+            if (body.email === findPhoto.email || body.email === 'danya.shundeev@internet.ru') {
+                await this.photoModel.findOneAndDelete({id: findPhoto.id})
+                return 'OK'
             }
         }
     }
@@ -416,5 +489,145 @@ export class PhotosService {
             return newComment
         }
     }
+
+    async getPostsText(body: {email: string, start: number, finish: number}) {
+        const difPos = body.finish - body.start
+        const allTextPostsCount = await this.photoModel.aggregate([
+            {
+                $match: {
+                    type: 'text',
+                }
+            },
+            {$group: {
+                _id: null,
+                count: {$sum: 1}
+            }},
+        ])
+        const targetTextPosts = await this.photoModel.aggregate([
+            {
+                $match: {
+                    type: 'text',
+                }
+            },
+            {$addFields: {
+                idNum: {$toLong: '$id'},
+            }},
+            {$sort: {idNum: -1}},
+            {$project: {idNum: 0}},
+            {$skip: body.start},
+            {$limit: difPos},
+        ]).option({lean: true})
+        console.log('Text posts: ')
+        console.log(targetTextPosts)
+        return {resultPhotos: targetTextPosts, allLength: allTextPostsCount[0].count}
+    }
+
+    async testTextPosts() {
+        const texts: string[] = ['Abc', 'Bcd', 'Cde', 'Def', 'Efg', 'Fgh', 'Ghi']
+        const dateToday: string = '08.09.2026'
+        const email: string = 'danya.shundeev@internet.ru'
+        const buffer = Buffer.alloc(0)
+        for (let item of texts) {
+            const date = new Date()
+            const id = date.getTime().toString()
+            const myPhoto = new this.photoModel({
+                id: id,
+                url: buffer,
+                email: email,
+                likes: [],
+                date: dateToday,
+                descript: '',
+                comments: [],
+                commentsPerm: true,
+                pin: false,
+                keyWords: [],
+                type: 'text',
+                text: item,
+                header: item[0],
+            })
+            await myPhoto.save()
+        }
+    }
+
+    async getUserTextPosts(email: string) {
+        const targetTextPosts = await this.photoModel.aggregate([
+            {
+                $match: {
+                    type: 'text',
+                    email: email,
+                }
+            },
+            {$addFields: {
+                idNum: {$toLong: '$id'},
+            }},
+            {$sort: {idNum: -1}},
+            {$project: {idNum: 0}},
+        ]).option({lean: true})
+        return targetTextPosts
+    }
+
+    async getTextPost(textPostId: string) {
+        const findTextPost = await this.photoModel.findOne({id: textPostId})
+        return findTextPost
+    }
+
+    async createTextPost(body: {email: string, header: string, text: string, date: string, id: string}) {
+        const buffer = Buffer.alloc(0)
+        const textPost = new this.photoModel({
+            id: body.id,
+            url: buffer,
+            email: body.email,
+            likes: [],
+            date: body.date,
+            descript: '',
+            comments: [],
+            commentsPerm: true,
+            pin: false,
+            keyWords: [],
+            type: 'text',
+            header: body.header,
+            text: body.text,
+        })
+        await textPost.save()
+        return textPost
+    }
+    
+    async explorePhotoInappropriateContent() {
+        if (process.env.GROQ_API_KEY) {
+            const id: string = '1774540349624'
+            const photo = await this.photoModel.findOne({id: id})
+            const buffer = await sharp(photo?.url)
+            .toBuffer()
+
+            const base64 = buffer.toString('base64')
+
+            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+        'Authorization': `Bearer ${process.env.OPEN_ROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        model: 'inclusionai/ling-3.0-flash-vl:free',
+        messages: [{
+            role: 'user',
+            content: [
+                { type: 'text', text: 'Is the photo acceptable for posting on social media? I only need your answer: Acceptable or Unacceptable; there should be no other text in the response.' },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+            ],
+        }],
+    }),
+});
+const data = await res.json();
+console.log(data.choices[0].message.content);
+
+            // const res = await fetch('https://openrouter.ai/api/v1/models');
+            // const { data } = await res.json();
+            // const freeModels = data.filter(el => el.pricing.prompt === '0')
+            // console.log(freeModels)
+
+        }
+    }
+
 
 }

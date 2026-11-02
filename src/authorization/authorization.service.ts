@@ -74,6 +74,8 @@ export class AuthorizationService {
                 versionToken: 1,
                 userNotifs: [],
                 keyWords: [],
+                ban: false,
+                call: true,
             })
             await myUser.save()
         } else {
@@ -97,6 +99,8 @@ export class AuthorizationService {
                 onlineStatus: {status: 'Online', plat: plat},
                 publicKeys: publicKeys,
                 versionToken: 1,
+                ban: false,
+                call: true,
             })
             await myUser.save() 
         }
@@ -107,21 +111,25 @@ export class AuthorizationService {
         if (findUser && findUser.password) {
             const checkPass = await argon2.verify(findUser.password, body.password.trim())
             if (checkPass === true) {
-                const tokens = await this.generateTokens(body.login)
-                if (!body.mobile) {
-                    response.cookie('accessToken', tokens.accessToken, {
-                        httpOnly: true,
-                        sameSite: 'strict',
-                        maxAge: 60 * 60 * 1000, 
-                    });
-                    return {
-                        refreshToken: tokens.refreshToken,
+                if (findUser.ban === false) {
+                    const tokens = await this.generateTokens(body.login)
+                    if (!body.mobile) {
+                        response.cookie('accessToken', tokens.accessToken, {
+                            httpOnly: true,
+                            sameSite: 'strict',
+                            maxAge: 60 * 60 * 1000, 
+                        });
+                        return {
+                            refreshToken: tokens.refreshToken,
+                        }
+                    } else {
+                        return {
+                            access: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                        }
                     }
                 } else {
-                    return {
-                        access: tokens.accessToken,
-                        refreshToken: tokens.refreshToken,
-                    }
+                    throw new BadRequestException()
                 }
             } else {
                 throw new BadRequestException()
@@ -396,6 +404,22 @@ export class AuthorizationService {
             }
         } else {
             return 'unauth'
+        }
+    }
+
+    async checkBanUser(body: {email: string, response: any}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        if (findUser) {
+            if (findUser.ban === true) {
+                body.response.cookie('accessToken', '', {
+                    httpOnly: true,
+                    sameSite: 'strict',
+                    maxAge: 60 * 60 * 1000, 
+                });
+                return 'Ban'
+            } else {
+                return 'OK'
+            }
         }
     }
 

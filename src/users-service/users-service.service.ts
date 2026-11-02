@@ -140,8 +140,10 @@ export class UsersServiceService {
             const findTargetUser = await this.userModel.findOne({email: resultEmail})
             const targetSubs = findTargetUser?.subscribes
             if (targetSubs) {
-                const filteredSubs = targetSubs.filter((el: string) => el !== findUser.email)
-                await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: filteredSubs}, {new: true})
+                if (findTargetUser?.ban === false) {
+                    const filteredSubs = targetSubs.filter((el: string) => el !== findUser.email)
+                    await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: filteredSubs}, {new: true})
+                }
             }
         }
     }   
@@ -164,10 +166,12 @@ export class UsersServiceService {
         const findUser = await this.userModel.findOne({email: body.resultEmail})
         if (findUser) {
             const findTargetUser = await this.userModel.findOne({email: resultEmail})
-            const targetSubs = findTargetUser?.subscribes
-            if (targetSubs) {
-                const newSubList = [...targetSubs, findUser.email]
-                await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: newSubList}, {new: true})
+            if (findTargetUser?.ban === false) {
+                const targetSubs = findTargetUser?.subscribes
+                if (targetSubs) {
+                    const newSubList = [...targetSubs, findUser.email]
+                    await this.userModel.findOneAndUpdate({email: resultEmail}, {subscribes: newSubList}, {new: true})
+                }
             }
         }
     }
@@ -404,12 +408,25 @@ export class UsersServiceService {
     async getUserData(email: string) {
         const findUser = await this.userModel.findOne({email: email}, {code: 0, messages: 0, password: 0}).lean()
         if (findUser) {
-            const userAvatar = await this.avaModel.findOne({email: findUser.email})
-            if (userAvatar) {
-                const resultUser = {...findUser, avatar: userAvatar.avatar}
-                return resultUser
+            if (!findUser.ban) {
+                const userAvatar = await this.avaModel.findOne({email: findUser.email})
+                if (userAvatar) {
+                    const resultUser = {...findUser, avatar: userAvatar.avatar}
+                    return {
+                        status: 'OK',
+                        user: resultUser,
+                    }
+                } else {
+                    return {
+                        status: 'OK',
+                        user: findUser,
+                    }
+                }
             } else {
-                return findUser
+                return {
+                    status: 'Ban',
+                    user: null,
+                }
             }
         } else {
             return false
@@ -663,6 +680,119 @@ export class UsersServiceService {
                 return []
             }
         }
+    }
+
+    async addWatchPhotos() {
+        const users: string[] = ['danya.shundeev@internet.ru', 'daniilsundeev2@gmail.com']
+        for (let user of users) {
+            await this.userModel.findOneAndUpdate({email: user}, {callBan: []}, {new: true})
+        }
+    }
+
+    async getCallPerm(body: {email: string, trueParamEmail: string}) {
+        const findUser = await this.userModel.findOne({email: body.trueParamEmail})
+        if (findUser) {
+            const userCallBan = findUser.callBan
+            if (userCallBan.includes(body.email)) {
+                return 'Ban'
+            } else {
+                return 'OK'
+            }
+        }
+    }
+
+    async getMyBamCallUsers(email: string) {
+        const findUser = await this.userModel.findOne({email: email})
+        if (findUser) {
+            return findUser.callBan
+        }
+    }
+
+    async changeCallPerm(body: {email: string, trueParamEmail: string, allow: string}) {
+        const findUser = await this.userModel.findOne({email: body.email})
+        let newBanCallUser: string[] = []
+        if (findUser) {
+            if (body.allow === 'allow') {
+                newBanCallUser = findUser.callBan.filter(el => el !== body.trueParamEmail)
+            } else {
+                newBanCallUser = [...findUser.callBan, body.trueParamEmail]
+            }
+            await this.userModel.findOneAndUpdate({email: findUser.email}, {callBan: newBanCallUser}, {new: true})
+        }
+    }
+
+    async getUsersChat(body: {userChats: string[]}) {
+        const resultUsers = await this.getAllUsers()
+        let resultUserChats: any[] = []
+        for (let item of body.userChats) {
+            const findUser = resultUsers.find(el => el.email === item) 
+            if (findUser) {
+                resultUserChats = [...resultUserChats, findUser]
+            }
+        }
+        console.log('Result user chats: ')
+        console.log(resultUserChats)
+        return resultUserChats
+    }
+
+    async getUsersByName(body: {nameInput: string}) {
+        const resultUsers = await this.userModel.aggregate([
+            {
+                $match: {
+                    'name': { $regex: body.nameInput, $options: 'i' },   
+                },
+            },
+            {$project: {messages: 0, password: 0, botMess: 0, _id: 0}},
+        ]);
+        console.log('Result users: ')
+        console.log(resultUsers)
+        return resultUsers
+    }
+
+    async getSubsUser(email: string) {
+        const mySubscriptions = await this.userModel.aggregate([
+            { 
+                $match: { subscribes: email },
+            },
+        ]);
+        const resultMySubscriptions = mySubscriptions.map(el => el.email)
+        return resultMySubscriptions
+    }
+
+    async getUsersPublish(body: {resultUniqueUsers: string[]}) {
+        let users: any[] = []
+        for (let item of body.resultUniqueUsers) {
+            const findUser = await this.userModel.findOne({email: item})
+            if (findUser) {
+                users = [...users, findUser]
+            }
+        }
+        const resultUsers = users.map(el => {
+            return {
+                email: el.email,
+                name: el.name,    
+                subscribes: el.subscribes,
+                notifs: el.notifs,
+                socket: el.socket,
+                visits: el.visits,
+                reports: el.reports,
+                avatar: el.avatar,
+                open: el.open,
+                permUsers: el.permUsers,
+                permMess: el.permMess,
+                birthday: el.birthday,
+                savePosts: el.savePosts,
+                peerId: el.peerId,
+                onlineStatus: el.onlineStatus,
+                publicKeys: el.publicKeys,
+                versionToken: el.versionToken,
+                userNotifs: el.userNotifs,
+                keyWords: el.keyWords,
+                ban: el.ban,
+                call: el.call,
+            }
+        })
+        return resultUsers
     }
 
 

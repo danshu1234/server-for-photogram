@@ -133,22 +133,48 @@ export class ChatsService {
     }
 
     async chatFindEmail(email: string, trueParamEmail: string) {
-        let findChat = await this.chatModel.aggregate([
-            {$addFields: {
-                isUsersChat: {
-                    $and: [
-                        { $in: [email, "$users"] },
-                        { $in: [trueParamEmail, "$users"] }
-                    ]
-                }
-            }},
-            {$match: {
-                'isUsersChat': true,
-                $expr: { $lt: [ { $size: "$users" }, 3]},
-            }},
-            {$project: {isUsersChat: 0}},
-        ])
-        return findChat
+        if (email !== trueParamEmail) {
+            let findChat = await this.chatModel.aggregate([
+                {$addFields: {
+                    isUsersChat: {
+                        $and: [
+                            { $in: [email, "$users"] },
+                            { $in: [trueParamEmail, "$users"] }
+                        ]
+                    }
+                }},
+                {$match: {
+                    'isUsersChat': true,
+                    $expr: { $lt: [ { $size: "$users" }, 3]},
+                }},
+                {$project: {isUsersChat: 0}},
+            ])
+            return findChat
+        } else {
+            const resultChat = await this.chatModel.aggregate([
+                {
+                    $match: {
+                        $expr: {
+                            $and: [
+                                {
+                                    $eq: [
+                                        { $arrayElemAt: ['$users', 0] },
+                                        email,
+                                    ],
+                                },
+                                {
+                                    $eq: [
+                                        { $arrayElemAt: ['$users', 1] },
+                                        trueParamEmail,
+                                    ],
+                                },
+                            ],
+                        },
+                    },
+                },
+            ]);
+            return resultChat
+        }
     }
 
     async getChat(email: string, trueParamEmail: string) {
@@ -188,12 +214,18 @@ export class ChatsService {
                 {$project: {isChatUser: 0}},
             ])
             let resultChats: any = []
+            console.log('Final chats: ')
+            console.log(userChats)
             for (let chat of userChats) {
                 let friendEmail: string = ''
-                if ('name' in chat) {
-                    friendEmail = chat.id
+                if (chat.users[0] !== chat.users[1]) {
+                    if ('name' in chat) {
+                        friendEmail = chat.id
+                    } else {
+                        friendEmail = chat.users.filter(el => el !== email)[0]
+                    }
                 } else {
-                    friendEmail = chat.users.filter(el => el !== email)[0]
+                    friendEmail = chat.users[0]
                 }
                 const userChat = await this.userModel.findOne({email: friendEmail})
                 const findPinStatus = chat.pin.find(el => el.user === email)
@@ -553,8 +585,6 @@ export class ChatsService {
     }
 
     async newChat(resultData: {user: string, text: {user: string, message: EncryptMess[]}[] | string, date: string, id: string, ans: string, per: string, type: string, email: string, trueParamEmail: string, origUser: string, origId: string, files: Express.Multer.File[], users: string[], videoId?: string, groupName?: string}) {
-        const findFriend = await this.userModel.findOne({email: resultData.trueParamEmail})
-        const findMe = await this.userModel.findOne({email: resultData.email})
         const videoId: string = uuidv4()
         let resultFiles: any[] = []
             if (resultData.type !== 'video') {
@@ -580,7 +610,12 @@ export class ChatsService {
                     resultFiles = resultPhotoFiles
                 }
             }
-        const resultUsers = [...resultData.users, resultData.email]
+        let resultUsers: string[] = []
+        if (resultData.users.length !== 0) {
+            resultUsers = [...resultData.users, resultData.email]
+        } else {
+            resultUsers = [resultData.email, resultData.email]
+        }
         let chatName: string = ''
         if (resultData.groupName) {
             chatName = resultData.groupName
@@ -1341,6 +1376,17 @@ export class ChatsService {
         })
         archive.finalize()
         return archive
+    }
+
+    async getPhotoById(body: {email: string, trueParamEmail: string, messId: string, photoId: string}) {
+        const findChat = await this.getChat(body.email, body.trueParamEmail)
+        if (findChat) {
+            const findMess = findChat.messages.find(el => el.id === body.messId)
+            if (findMess) {
+                const findPhoto = findMess.photos.find(el => el.id === body.photoId)
+                return findPhoto.base64
+            }
+        }
     }
 
 

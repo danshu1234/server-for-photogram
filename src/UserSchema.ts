@@ -236,6 +236,15 @@ export class User {
   
   @Prop({ required: false })
   keyWords: KeyWord[];
+
+  @Prop({ required: false })
+  ban: boolean;
+
+  @Prop({ required: false })
+  watchPhotos: string[];
+
+  @Prop({ required: false })
+  callBan: string[];
 }
 
 

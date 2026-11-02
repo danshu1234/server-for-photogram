@@ -30,7 +30,7 @@ export class Photo {
   @Prop({ required: true })
   id: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   url: Buffer;
 
   @Prop({ required: true })
@@ -56,6 +56,15 @@ export class Photo {
 
   @Prop({ required: false })
   keyWords: KeyWord[];
+
+  @Prop({ required: true })
+  type: string;
+
+  @Prop({ required: false })
+  text: string;
+
+  @Prop({ required: false })
+  header: string;
 }
 
 export const PhotoSchema = SchemaFactory.createForClass(Photo);
